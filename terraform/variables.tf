@@ -39,3 +39,15 @@ variable "admin_email" {
   description = "Email for Let's Encrypt cert expiry notifications"
   type        = string
 }
+
+variable "github_org" {
+  description = "GitHub username or organization that owns the repo"
+  type        = string
+  default     = "rerkted"
+}
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "aws-server"
+}
