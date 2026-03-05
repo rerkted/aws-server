@@ -1,6 +1,5 @@
 # ─── .github/workflows/deploy.yml ─────────────────────────────
-# Full CI/CD: Push → Build Golden Image → Push to ECR → Deploy to EC2
-# Zero-downtime rolling deploy
+# Full CI/CD: Push → Build images → Push to ECR → Deploy to EC2
 # Auth: OIDC federation — no long-lived AWS access keys
 
 name: Build & Deploy Portfolio
@@ -8,21 +7,22 @@ name: Build & Deploy Portfolio
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
   IMAGE_NAME: portfolio
+  AI_IMAGE_NAME: rerkt-ai
 
 jobs:
-  # ── JOB 1: Build & Push Docker Image (Golden Image) ──────────
+  # ── JOB 1: Build & Push Docker Images ────────────────────────
   build:
-    name: 🐳 Build & Push Golden Image
+    name: Build & Push Images
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # Required for OIDC token request
-      contents: read    # Required for actions/checkout
+      id-token: write
+      contents: read
 
     outputs:
       image-tag: ${{ steps.meta.outputs.version }}
@@ -42,7 +42,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Extract metadata
+      - name: Extract metadata (portfolio)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -51,10 +51,19 @@ jobs:
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest
 
+      - name: Extract metadata (ai proxy)
+        id: meta-ai
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.AI_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
+      - name: Build and push portfolio image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -65,24 +74,44 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Scan image for vulnerabilities
+      - name: Build and push Rerkt.AI proxy image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./chat
+          push: true
+          tags: ${{ steps.meta-ai.outputs.tags }}
+          labels: ${{ steps.meta-ai.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Scan portfolio image for vulnerabilities
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
           format: table
-          exit-code: '1'          # Block deployment on CRITICAL findings
-          ignore-unfixed: true    # Only fail on fixable vulns
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL'
+
+      - name: Scan AI proxy image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.34.2
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AI_IMAGE_NAME }}:latest
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
           severity: 'CRITICAL'
 
   # ── JOB 2: Deploy to EC2 ─────────────────────────────────────
   deploy:
-    name: 🚀 Deploy to EC2
+    name: Deploy to EC2
     runs-on: ubuntu-latest
     needs: build
     environment: production
 
     permissions:
-      id-token: write   # Required for OIDC token request
+      id-token: write
       contents: read
 
     steps:
@@ -92,22 +121,31 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy via SSM (no SSH keys needed!)
+      - name: Deploy via SSM
         timeout-minutes: 10
         run: |
-          IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
+          PORTFOLIO_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
+          AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
           INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
+          REGISTRY="${{ needs.build.outputs.ecr-registry }}"
 
           COMMAND=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 300 \
             --parameters commands="[
-              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build.outputs.ecr-registry }}\",
-              \"docker pull $IMAGE\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
+
+              \"docker pull $PORTFOLIO_IMAGE\",
               \"docker stop portfolio || true\",
               \"docker rm portfolio || true\",
-              \"docker run -d --name portfolio --restart always -p 80:80 -p 443:443 -v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot $IMAGE nginx -c /etc/nginx/nginx-ssl.conf -g 'daemon off;'\",
+              \"docker run -d --name portfolio --restart always -p 80:80 -p 443:443 -v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot $PORTFOLIO_IMAGE nginx -c /etc/nginx/nginx-ssl.conf -g 'daemon off;'\",
+
+              \"docker pull $AI_IMAGE\",
+              \"docker stop rerkt-ai || true\",
+              \"docker rm rerkt-ai || true\",
+              \"docker run -d --name rerkt-ai --restart always -p 127.0.0.1:3001:3001 -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} $AI_IMAGE\",
+
               \"docker image prune -f\"
             ]" \
             --query "Command.CommandId" \
@@ -115,12 +153,10 @@ jobs:
 
           echo "Command ID: $COMMAND"
 
-          # Wait for deployment to complete (max 5 min)
           aws ssm wait command-executed \
             --command-id "$COMMAND" \
             --instance-id "$INSTANCE_ID"
 
-          # Verify command succeeded
           STATUS=$(aws ssm get-command-invocation \
             --command-id "$COMMAND" \
             --instance-id "$INSTANCE_ID" \
@@ -128,7 +164,7 @@ jobs:
             --output text)
 
           if [ "$STATUS" != "Success" ]; then
-            echo "❌ SSM command failed with status: $STATUS"
+            echo "SSM command failed with status: $STATUS"
             aws ssm get-command-invocation \
               --command-id "$COMMAND" \
               --instance-id "$INSTANCE_ID" \
@@ -137,37 +173,46 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Deployment complete!"
+          echo "Deployment complete"
 
-      - name: Health check
+      - name: Health check — portfolio
         run: |
           sleep 10
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://${{ secrets.EC2_PUBLIC_IP }}/health)
           if [ "$STATUS" != "200" ]; then
-            echo "❌ Health check failed! HTTP $STATUS"
+            echo "Portfolio health check failed — HTTP $STATUS"
             exit 1
           fi
-          echo "✅ Health check passed! HTTP $STATUS"
+          echo "Portfolio health check passed — HTTP $STATUS"
 
-      - name: Create deployment summary
+      - name: Health check — Rerkt.AI
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://ai.rerktserver.com/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Rerkt.AI health check returned HTTP $STATUS (SSL cert may need renewal for new subdomain)"
+          else
+            echo "Rerkt.AI health check passed — HTTP $STATUS"
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Portfolio | \`${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rerkt.AI | \`${{ env.AI_IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Git SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deployed at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
           echo "| Auth | OIDC (no static keys) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ✅ Live |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | Live |" >> $GITHUB_STEP_SUMMARY
 
   # ── JOB 3: Notify on failure ─────────────────────────────────
   notify-failure:
-    name: 🔔 Notify on Failure
+    name: Notify on Failure
     runs-on: ubuntu-latest
     needs: [build, deploy]
     if: failure()
     steps:
       - name: Send failure notification
         run: |
-          echo "Pipeline failed! Check GitHub Actions for details."
-          # Add Slack/email notification here if desired
+          echo "Pipeline failed. Check GitHub Actions for details."

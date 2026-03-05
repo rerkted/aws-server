@@ -33,3 +33,36 @@ resource "aws_ecr_lifecycle_policy" "portfolio" {
     }]
   })
 }
+
+# ─── ECR repo for Rerkt.AI proxy ──────────────────────────────
+resource "aws_ecr_repository" "rerkt_ai" {
+  name                 = "rerkt-ai"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = { Name = "rerkt-ai-ecr" }
+}
+
+resource "aws_ecr_lifecycle_policy" "rerkt_ai" {
+  repository = aws_ecr_repository.rerkt_ai.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep only last 5 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 5
+      }
+      action = { type = "expire" }
+    }]
+  })
+}

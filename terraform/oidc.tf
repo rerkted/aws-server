@@ -90,7 +90,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ecr:DescribeRepositories",
           "ecr:ListImages"
         ]
-        Resource = aws_ecr_repository.portfolio.arn
+        Resource = [
+          aws_ecr_repository.portfolio.arn,
+          aws_ecr_repository.rerkt_ai.arn
+        ]
       },
       {
         Sid    = "SSMDeploy"
