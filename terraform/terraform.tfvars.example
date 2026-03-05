@@ -1,0 +1,9 @@
+cat > ~/Documents/github-projects/rerktserver-aws-project/aws-server/terraform/terraform.tfvars.example << 'EOF'
+aws_region    = "us-east-1"
+environment   = "production"
+instance_type = "t3.nano"
+key_pair_name = "your-key-pair-name"
+your_ip_cidr  = "YOUR.IP.HERE/32"
+domain_name   = "yourdomain.com"
+admin_email   = "you@example.com"
+EOF

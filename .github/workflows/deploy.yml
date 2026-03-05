@@ -62,12 +62,13 @@ jobs:
           platforms: linux/amd64
 
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0   # pinned version
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
           format: table
-          exit-code: '0'  # Don't fail on findings, just report
-          severity: 'CRITICAL,HIGH'
+          exit-code: '1'          # block deployment on CRITICAL findings
+          ignore-unfixed: true    # only fail on fixable vulns
+          severity: 'CRITICAL'
 
   # ── JOB 2: Deploy to EC2 ─────────────────────────────────────
   deploy:
@@ -85,6 +86,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy via SSM (no SSH keys needed!)
+        timeout-minutes: 10
         run: |
           IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
           INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
@@ -92,6 +94,7 @@ jobs:
           COMMAND=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
+            --timeout-seconds 300 \
             --parameters commands="[
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build.outputs.ecr-registry }}\",
               \"docker pull $IMAGE\",
@@ -105,17 +108,34 @@ jobs:
 
           echo "Command ID: $COMMAND"
 
-          # Wait for deployment to complete
+          # Wait for deployment to complete (max 5 min)
           aws ssm wait command-executed \
             --command-id "$COMMAND" \
             --instance-id "$INSTANCE_ID"
+
+          # Verify command succeeded
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND" \
+            --instance-id "$INSTANCE_ID" \
+            --query "Status" \
+            --output text)
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "❌ SSM command failed with status: $STATUS"
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND" \
+              --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
 
           echo "✅ Deployment complete!"
 
       - name: Health check
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.EC2_PUBLIC_IP }}/health)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://${{ secrets.EC2_PUBLIC_IP }}/health)
           if [ "$STATUS" != "200" ]; then
             echo "❌ Health check failed! HTTP $STATUS"
             exit 1
