@@ -165,6 +165,11 @@ resource "aws_iam_role_policy_attachment" "ecr_read" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ec2_portfolio.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "portfolio" {
   name = "portfolio-instance-profile"
   role = aws_iam_role.ec2_portfolio.name
