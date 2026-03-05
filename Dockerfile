@@ -6,8 +6,9 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy website files
 COPY ./website/ /usr/share/nginx/html/
 
-# Copy custom nginx config
+# Copy both nginx configs
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf
 
 # Create certbot webroot directory
 RUN mkdir -p /var/www/certbot

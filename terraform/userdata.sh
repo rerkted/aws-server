@@ -12,10 +12,8 @@ echo "=== Bootstrap started at $(date) ==="
 
 # ── 1. Install dependencies ───────────────────────────────────
 yum update -y
-yum install -y docker python3-pip augeas-libs
-
-# Install certbot using pip3 (works on Amazon Linux 2023)
-pip3 install certbot requests
+yum install -y docker python3-pip
+pip3 install certbot
 
 systemctl enable docker
 systemctl start docker
@@ -31,7 +29,7 @@ echo "ECR login successful"
 # ── 3. Create webroot for certbot challenge ───────────────────
 mkdir -p /var/www/certbot
 
-# ── 4. Start HTTP-only container for ACME challenge ──────────
+# ── 4. Start HTTP-only container (no SSL certs needed yet) ────
 docker run -d \
   --name portfolio \
   --restart unless-stopped \
@@ -39,19 +37,18 @@ docker run -d \
   -v /var/www/certbot:/var/www/certbot \
   "$ECR_REGISTRY:latest"
 
-echo "Waiting 15s for nginx to be ready..."
-sleep 15
-
-# Verify container is running before requesting cert
-if ! docker ps | grep -q portfolio; then
-  echo "ERROR: portfolio container failed to start"
-  docker logs portfolio
-  exit 1
-fi
-
-echo "Container running, requesting SSL cert..."
+echo "Waiting for nginx to be ready..."
+for attempt in $(seq 1 30); do
+  if curl -s http://localhost/health | grep -q "OK"; then
+    echo "nginx is ready after attempt $attempt"
+    break
+  fi
+  echo "Waiting... attempt $attempt"
+  sleep 5
+done
 
 # ── 5. Issue SSL certificate ──────────────────────────────────
+echo "Requesting SSL cert at $(date)"
 certbot certonly \
   --webroot \
   --webroot-path /var/www/certbot \
@@ -61,9 +58,9 @@ certbot certonly \
   -d "$DOMAIN" \
   -d "www.$DOMAIN"
 
-echo "SSL cert issued successfully"
+echo "SSL cert issued successfully at $(date)"
 
-# ── 6. Restart container with SSL certs mounted ───────────────
+# ── 6. Restart container with SSL config and certs mounted ────
 docker stop portfolio && docker rm portfolio
 
 docker run -d \
@@ -73,17 +70,18 @@ docker run -d \
   -p 443:443 \
   -v /etc/letsencrypt:/etc/letsencrypt:ro \
   -v /var/www/certbot:/var/www/certbot \
-  "$ECR_REGISTRY:latest"
+  "$ECR_REGISTRY:latest" \
+  nginx -c /etc/nginx/nginx-ssl.conf -g "daemon off;"
 
 echo "Container restarted with HTTPS at $(date)"
 
-# ── 7. Auto-renewal cron ──────────────────────────────────────
+# ── 7. Auto-renewal cron (runs twice daily) ───────────────────
 cat > /etc/cron.d/certbot-renew << 'CRON'
 0 3,15 * * * root certbot renew --quiet --deploy-hook "docker kill -s HUP portfolio" 2>&1 | logger -t certbot
 CRON
 chmod 644 /etc/cron.d/certbot-renew
 
-# ── 8. ECR token refresh cron ─────────────────────────────────
+# ── 8. ECR token refresh (expires every 12hrs) ────────────────
 cat > /etc/cron.d/ecr-login << CRON
 0 */11 * * * root aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY 2>&1 | logger -t ecr-login
 CRON
