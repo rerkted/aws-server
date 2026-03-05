@@ -1,15 +1,19 @@
 FROM nginx:1.27-alpine
 
-# Patch all OS packages to latest versions
+# Patch all OS packages
 RUN apk upgrade --no-cache
 
 # Remove default nginx content
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy website files
+# Copy portfolio website
 COPY ./website/ /usr/share/nginx/html/
 
-# Copy both nginx configs
+# Copy Rerkt.AI chat UI
+RUN mkdir -p /usr/share/nginx/ai
+COPY ./chat/index.html /usr/share/nginx/ai/
+
+# Copy nginx configs
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf
 
@@ -17,8 +21,8 @@ COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf
 RUN mkdir -p /var/www/certbot
 
 # Fix permissions
-RUN chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html
+RUN chown -R nginx:nginx /usr/share/nginx/html /usr/share/nginx/ai && \
+    chmod -R 755 /usr/share/nginx/html /usr/share/nginx/ai
 
 EXPOSE 80 443
 

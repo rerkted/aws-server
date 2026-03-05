@@ -171,13 +171,13 @@
       </p>
       <div class="hero-cta">
         <a href="#projects" class="btn-primary">View Projects &rarr;</a>
-        <a href="mailto:Edwardrerk@proton.me" class="btn-ghost">Get In Touch</a>
+        <a href="#contact" class="btn-ghost">Get In Touch</a>
       </div>
     </div>
     <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore</div>
   </section>
 
-   <section id="about">
+  <section id="about">
     <div class="section-label">01 // About</div>
     <h2 class="section-title">Security isn't<br>an afterthought.</h2>
     <div class="about-grid">
@@ -289,6 +289,13 @@
         <div class="project-tech"><span class="tag">OIDC</span><span class="tag">IAM Federation</span><span class="tag">GitHub Actions</span><span class="tag">Terraform</span><span class="tag">AWS STS</span></div>
         <a href="https://github.com/rerkted/aws-server/blob/main/OIDC-README.md" target="_blank" class="project-link">View writeup &rarr;</a>
       </div>
+      <div class="project-card">
+        <div class="project-number">Project 06</div>
+        <div class="project-name">Rerkt.AI &mdash; AI Portfolio Assistant</div>
+        <div class="project-desc">Built and deployed an AI assistant at ai.rerktserver.com on the same $6.50/mo EC2 infrastructure. A Node.js proxy container holds the API key server-side, rate limits requests per IP, and validates request origin before forwarding to the Anthropic API. The chat UI, proxy, and SSL cert are all deployed through the same GitHub Actions pipeline.</div>
+        <div class="project-tech"><span class="tag">Claude API</span><span class="tag">Node.js</span><span class="tag">Docker</span><span class="tag">nginx</span><span class="tag">EC2</span><span class="tag">GitHub Actions</span></div>
+        <a href="https://ai.rerktserver.com" target="_blank" class="project-link">Try it live &rarr;</a>
+      </div>
     </div>
   </section>
 
@@ -354,8 +361,8 @@
         <h2 class="section-title">Let's build<br>something secure.</h2>
         <p class="section-sub" style="margin-bottom:2rem;">Open to senior cloud, DevSecOps, and platform engineering roles. Also available for consulting on AWS architecture, security compliance, and infrastructure automation.</p>
         <div class="contact-links">
-          <a href="/cdn-cgi/l/email-protection#2a6f4e5d4b584e584f58416a5a58455e454404474f" class="contact-link">
-            <div><div class="contact-link-name">Email</div><div class="contact-link-handle"><span class="__cf_email__" data-cfemail="2b6e4f5c4a594f594e59406b5b59445f444505464e">[email&#160;protected]</span></div></div>
+          <a href="mailto:Edwardrerk@proton.me" class="contact-link">
+            <div><div class="contact-link-name">Email</div><div class="contact-link-handle">Edwardrerk@proton.me</div></div>
             <span class="contact-link-arrow">&rarr;</span>
           </a>
           <a href="https://github.com/rerkted" target="_blank" class="contact-link">
@@ -383,12 +390,11 @@
     <div class="footer-links">
       <a href="#home">Back to top</a>
       <a href="https://github.com/rerkted/aws-server" target="_blank">GitHub</a>
-      <a href="/cdn-cgi/l/email-protection#084d6c7f697a6c7a6d7a6348787a677c676626656d">Email</a>
+      <a href="mailto:Edwardrerk@proton.me">Email</a>
     </div>
   </footer>
 
-  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-    // Custom cursor
+  <script>
     const cursor = document.getElementById('cursor');
     const cursorRing = document.getElementById('cursorRing');
     let mx = 0, my = 0, rx = 0, ry = 0;
@@ -409,11 +415,9 @@
       el.addEventListener('mouseleave', () => { cursorRing.style.width = '32px'; cursorRing.style.height = '32px'; });
     });
 
-    // Nav scroll
     const nav = document.getElementById('nav');
     window.addEventListener('scroll', () => { nav.classList.toggle('scrolled', window.scrollY > 50); });
 
-    // Contact form - Formspree
     document.getElementById('submit-btn').addEventListener('click', async () => {
       const name    = document.querySelector('[name="name"]').value;
       const email   = document.querySelector('[name="email"]').value;
@@ -443,4 +447,15 @@
         status.textContent = 'Message sent! I will get back to you soon.';
         btn.textContent = 'Sent';
         document.querySelector('[name="name"]').value = '';
-        document.que
+        document.querySelector('[name="email"]').value = '';
+        document.querySelector('[name="message"]').value = '';
+      } else {
+        status.style.color = '#ff6b6b';
+        status.textContent = 'Something went wrong. Please try again.';
+        btn.textContent = 'Send Message \u2192';
+        btn.style.opacity = '1';
+      }
+    });
+  </script>
+</body>
+</html>
