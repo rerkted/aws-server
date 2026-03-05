@@ -1,5 +1,8 @@
 FROM nginx:1.27-alpine
 
+# Patch all OS packages to latest versions
+RUN apk upgrade --no-cache
+
 # Remove default nginx content
 RUN rm -rf /usr/share/nginx/html/*
 
