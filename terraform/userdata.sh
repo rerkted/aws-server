@@ -1,9 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# ─── Bootstrap EC2: Docker + Certbot SSL ───────────────────────
-# Runs ONCE on first launch via Terraform user_data
-
 ECR_REGISTRY="${ecr_registry}"
 AWS_REGION="${aws_region}"
 DOMAIN="${domain_name}"
@@ -15,9 +12,8 @@ echo "=== Bootstrap started at $(date) ==="
 
 # ── 1. Install dependencies ───────────────────────────────────
 yum update -y
-yum install -y docker python3
-
-pip3 install certbot certbot-nginx
+yum install -y docker python3-pip
+pip3 install certbot
 
 systemctl enable docker
 systemctl start docker
@@ -26,17 +22,22 @@ systemctl start docker
 aws ecr get-login-password --region "$AWS_REGION" | \
   docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-# ── 3. Bootstrap: HTTP-only container for ACME challenge ──────
+# ── 3. Start HTTP-only first (no SSL yet) ─────────────────────
 mkdir -p /var/www/certbot
+
 docker run -d \
-  --name portfolio-bootstrap \
+  --name portfolio \
+  --restart always \
   -p 80:80 \
+  -p 443:443 \
   -v /var/www/certbot:/var/www/certbot \
+  -e SSL_ENABLED=false \
   "$ECR_REGISTRY:latest"
 
-sleep 8
+echo "Container started on HTTP, waiting 10s before cert request..."
+sleep 10
 
-# ── 4. Issue Let's Encrypt cert ───────────────────────────────
+# ── 4. Issue SSL cert ─────────────────────────────────────────
 certbot certonly \
   --webroot \
   --webroot-path /var/www/certbot \
@@ -48,8 +49,8 @@ certbot certonly \
 
 echo "SSL cert issued for $DOMAIN"
 
-# ── 5. Switch to HTTPS production container ───────────────────
-docker stop portfolio-bootstrap && docker rm portfolio-bootstrap
+# ── 5. Restart container with SSL certs mounted ───────────────
+docker stop portfolio && docker rm portfolio
 
 docker run -d \
   --name portfolio \
@@ -60,13 +61,15 @@ docker run -d \
   -v /var/www/certbot:/var/www/certbot \
   "$ECR_REGISTRY:latest"
 
-# ── 6. Auto-renewal cron (runs twice daily, renews if <30 days left) ──
+echo "Container restarted with HTTPS"
+
+# ── 6. Auto-renewal cron ──────────────────────────────────────
 cat > /etc/cron.d/certbot-renew << 'CRON'
 0 3,15 * * * root certbot renew --quiet --deploy-hook "docker kill -s HUP portfolio" 2>&1 | logger -t certbot
 CRON
 chmod 644 /etc/cron.d/certbot-renew
 
-# ── 7. ECR token refresh (expires every 12hrs) ────────────────
+# ── 7. ECR token refresh ──────────────────────────────────────
 cat > /etc/cron.d/ecr-login << CRON
 0 */11 * * * root aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY 2>&1 | logger -t ecr-login
 CRON
