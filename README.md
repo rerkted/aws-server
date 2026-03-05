@@ -1,15 +1,12 @@
-# 🚀 Portfolio Infrastructure
+# 🚀 Portfolio Infrastructure — rerktserver.com
 
-A **cost-effective**, **repeatable**, and **fully automated** portfolio website using:
-- **Docker** (golden image)
-- **AWS ECR** (image registry)
-- **AWS EC2 t3.nano** (~$3.50/month)
-- **Terraform** (infrastructure as code)
-- **GitHub Actions** (CI/CD pipeline)
+A **cost-effective**, **secure**, and **fully automated** portfolio website for Edward Rerkphuritat, built with DevSecOps best practices end-to-end.
+
+[![Build & Deploy](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml/badge.svg)](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml)
 
 ---
 
-## 💡 Architecture
+## 🏗️ Architecture
 
 ```
 Git Push to main
@@ -17,35 +14,44 @@ Git Push to main
       ▼
 GitHub Actions
       │
-      ├── 🐳 docker build  →  ECR push (golden image)
+      ├── 🐳 Docker build (linux/amd64)
+      ├── 🔍 Trivy vulnerability scan (blocks on CRITICAL)
+      ├── 📦 Push to ECR
       │
-      └── 🚀 SSM deploy  →  EC2 pull & run
-                                │
-                                ▼
-                         nginx:alpine container
-                         serving your portfolio
+      └── 🚀 SSM deploy → EC2 pull & run
+                              │
+                              ▼
+                     nginx:1.27-alpine container
+                     HTTPS via Let's Encrypt
+                     serving rerktserver.com
 ```
 
-**Cost breakdown:**
-| Resource | Cost |
-|----------|------|
-| EC2 t3.nano | ~$3.50/mo |
-| Elastic IP | Free while attached |
-| ECR (5 images) | ~$0.05/mo |
-| Data transfer | ~$0.50/mo |
-| **Total** | **~$4/mo** vs ~$35/mo on t2.standard |
+---
+
+## 💰 Cost Breakdown
+
+| Resource         | Cost       |
+|------------------|------------|
+| EC2 t3.nano      | ~$3.50/mo  |
+| EBS gp3 30GB     | ~$2.40/mo  |
+| Elastic IP       | Free while attached |
+| ECR (5 images)   | ~$0.05/mo  |
+| Data transfer    | ~$0.50/mo  |
+| **Total**        | **~$6.50/mo** |
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Prerequisites
+### Prerequisites
+
 - AWS CLI configured (`aws configure`)
 - Terraform installed (`>= 1.5`)
 - Docker installed
 - An existing EC2 key pair in AWS
+- Domain registered in Route53
 
-### 2. Deploy Infrastructure
+### 1. Deploy Infrastructure
 
 ```bash
 cd terraform
@@ -60,33 +66,24 @@ terraform plan
 terraform apply
 ```
 
-### 3. Add GitHub Secrets
+### 2. Add GitHub Secrets
 
-In your repo → Settings → Secrets:
+Go to your repo → **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |--------|-------|
 | `AWS_ACCESS_KEY_ID` | IAM user access key |
 | `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
-| `EC2_INSTANCE_ID` | From terraform output |
-| `EC2_PUBLIC_IP` | From terraform output |
+| `EC2_INSTANCE_ID` | From `terraform output instance_id` |
+| `EC2_PUBLIC_IP` | From `terraform output public_ip` |
 
-### 4. Enable SSM on EC2
-
-The deploy workflow uses AWS SSM instead of SSH (no exposed port 22 needed):
-
-```bash
-# Add this policy to the EC2 IAM role (add in main.tf or console):
-# arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-```
-
-### 5. Push to Deploy
+### 3. Push to Deploy
 
 ```bash
 git add .
 git commit -m "feat: update portfolio"
 git push origin main
-# → GitHub Actions automatically builds, pushes, and deploys
+# → GitHub Actions automatically builds, scans, and deploys
 ```
 
 ---
@@ -94,97 +91,139 @@ git push origin main
 ## 🏗️ Project Structure
 
 ```
-portfolio/
+aws-server/
 ├── website/
-│   └── index.html          # Your portfolio site
+│   └── index.html              # Portfolio site
 ├── terraform/
-│   ├── main.tf             # VPC, EC2, ECR, IAM
-│   ├── variables.tf        # Input variables
-│   └── userdata.sh         # EC2 bootstrap script
+│   ├── main.tf                 # VPC, EC2, ECR, IAM, Route53
+│   ├── variables.tf            # Input variables
+│   ├── userdata.sh             # EC2 bootstrap — installs Docker, Certbot, issues SSL cert
+│   └── terraform.tfvars.example
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml      # Full CI/CD pipeline
-├── Dockerfile              # Golden image definition
-├── nginx.conf              # Nginx configuration
+│       └── deploy.yml          # CI/CD pipeline
+├── Dockerfile                  # nginx:1.27-alpine golden image
+├── nginx.conf                  # HTTP-only config (used on first boot for ACME challenge)
+├── nginx-ssl.conf              # Full HTTPS config (used after cert is issued)
 └── README.md
 ```
 
 ---
 
+## 🔐 SSL / HTTPS
+
+Certificates are fully automated via **Let's Encrypt + Certbot** on first EC2 boot:
+
+```
+userdata.sh runs on first boot:
+  1. Docker installed, ECR image pulled
+  2. nginx starts on HTTP port 80 (nginx.conf — no SSL required)
+  3. Certbot requests cert via ACME webroot challenge
+  4. Cert issued → /etc/letsencrypt/live/rerktserver.com/
+  5. Container restarts with HTTPS using nginx-ssl.conf
+
+Auto-renewal (cron, twice daily — 3am & 3pm):
+  └── certbot renew → SIGHUP nginx (zero downtime)
+```
+
+### Cert expiry safety net
+
+| Event | Timing |
+|-------|--------|
+| Cert validity | 90 days |
+| Auto-renewal trigger | < 30 days remaining |
+| Cron schedule | Twice daily (3am, 3pm UTC) |
+
+### Verify on the server
+
+```bash
+sudo certbot certificates          # View cert + expiry
+sudo certbot renew --dry-run       # Test renewal
+sudo tail -f /var/log/syslog | grep certbot
+```
+
+---
+
+## 🛡️ Security Features
+
+### Infrastructure
+- ✅ EC2 IAM instance role — no hardcoded credentials
+- ✅ SSH restricted to your IP only (`your_ip_cidr` in tfvars)
+- ✅ SSM-based deployment — no SSH port exposed in CI/CD
+- ✅ Encrypted EBS volume (gp3)
+- ✅ ECR image scanning on push
+
+### CI/CD Pipeline
+- ✅ Trivy vulnerability scanning — blocks deployment on CRITICAL CVEs
+- ✅ `apk upgrade` in Dockerfile — patches all OS packages at build time
+- ✅ Pinned action versions — prevents supply chain attacks
+- ✅ SSM command status verification — detects silent deploy failures
+- ✅ 10-minute pipeline timeout
+
+### nginx / HTTPS
+- ✅ TLS 1.2 and 1.3 only
+- ✅ HSTS with 2-year max-age + includeSubDomains
+- ✅ Rate limiting (20 req/s general, 2 req/min contact)
+- ✅ Security headers: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
+- ✅ Static asset caching with immutable Cache-Control
+
+### IAM Least Privilege
+The `github-actions-portfolio` IAM user has only the minimum permissions needed:
+- ECR: push/pull to the `portfolio` repository only
+- SSM: send and check commands
+- EC2: describe instances
+
+---
+
 ## 🔧 Customization
 
-**Change instance type** (for more traffic):
+**Change instance type:**
 ```hcl
 # terraform.tfvars
 instance_type = "t3.micro"   # $7.50/mo
 instance_type = "t3.small"   # $15/mo
 ```
 
-**Add HTTPS** (recommended):
-1. Point your domain to the Elastic IP
-2. Add `certbot` to `userdata.sh`
-3. Update nginx.conf for SSL termination
-
-**Scale up** (if you go viral):
-Replace EC2 with ECS Fargate or add an ALB + Auto Scaling Group — the same Docker image works everywhere.
+**Scale up (if traffic grows):**
+Replace EC2 with ECS Fargate or add ALB + Auto Scaling — the same Docker image works everywhere.
 
 ---
 
-## 🛡️ Security Features
+## 🔄 Re-deploying / Rebuilding EC2
 
-- EC2 instance role (no hardcoded credentials)
-- SSH restricted to your IP only
-- ECR image scanning on push
-- Security headers in nginx
-- Encrypted EBS volume
-- SSM-based deployment (no SSH in CI/CD)
+If you ever need to destroy and recreate the EC2:
+
+```bash
+cd terraform
+
+# Destroy only EC2 and Elastic IP (keeps ECR, VPC, Route53)
+terraform destroy \
+  -target=aws_eip.portfolio \
+  -target=aws_instance.portfolio
+
+# Recreate — userdata.sh runs automatically on first boot
+terraform apply
+```
+
+After `terraform apply`:
+1. Update `EC2_INSTANCE_ID` and `EC2_PUBLIC_IP` in GitHub Secrets
+2. Watch bootstrap: `ssh -i ~/.ssh/your-key.pem ec2-user@NEW_IP`
+3. `sudo tail -f /var/log/portfolio-bootstrap.log`
+4. Wait for `=== Bootstrap complete ===`
+5. Re-run GitHub Actions pipeline
 
 ---
 
-## 📊 Monitoring (Optional, Free Tier)
+## 📊 Monitoring (Optional)
 
 ```bash
 # CloudWatch basic metrics are free
-# Add to userdata.sh to enable:
+# Add to userdata.sh:
 yum install -y amazon-cloudwatch-agent
 ```
 
 ---
 
-## 🔐 HTTPS / SSL — rerktserver.com
+## 🌐 Live Site
 
-**No separate repo needed.** Everything is automated in this same repo.
-
-### How cert lifecycle works
-```
-First EC2 boot (userdata.sh runs automatically):
-  1. nginx starts on HTTP port 80
-  2. Certbot requests cert from Let's Encrypt
-  3. Let's Encrypt hits /.well-known/acme-challenge/ to verify domain ownership
-  4. Cert issued → /etc/letsencrypt/live/rerktserver.com/
-  5. Container restarts with HTTPS (port 443) + certs mounted read-only
-
-Auto-renewal (cron, twice daily — 3am & 3pm):
-  └── certbot renew → renews only if < 30 days remain → SIGHUP nginx (zero downtime)
-```
-
-### Cert expiry safety net
-| What | When |
-|------|------|
-| Cert validity | 90 days |
-| Auto-renewal trigger | < 30 days remaining |
-| Cron schedule | Twice daily |
-| Email warning (if renewal fails) | 20 days + 10 days before expiry |
-| Nginx reload after renewal | Automatic (zero downtime) |
-
-### Verify on the server
-```bash
-sudo certbot certificates          # View cert + expiry date
-sudo certbot renew --dry-run       # Test renewal without actually renewing
-sudo tail -f /var/log/syslog | grep certbot   # Watch renewal logs
-```
-
-### DNS requirement
-Terraform auto-creates Route53 A records for `rerktserver.com` and `www.rerktserver.com`.
-If your domain is at GoDaddy/Namecheap — either transfer DNS to Route53, or manually
-create an A record pointing to the Elastic IP from `terraform output public_ip`.
+**[https://rerktserver.com](https://rerktserver.com)**
