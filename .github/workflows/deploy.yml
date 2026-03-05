@@ -1,6 +1,7 @@
 # ─── .github/workflows/deploy.yml ─────────────────────────────
 # Full CI/CD: Push → Build Golden Image → Push to ECR → Deploy to EC2
 # Zero-downtime rolling deploy
+# Auth: OIDC federation — no long-lived AWS access keys
 
 name: Build & Deploy Portfolio
 
@@ -19,6 +20,10 @@ jobs:
     name: 🐳 Build & Push Golden Image
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write   # Required for OIDC token request
+      contents: read    # Required for actions/checkout
+
     outputs:
       image-tag: ${{ steps.meta.outputs.version }}
       ecr-registry: ${{ steps.login-ecr.outputs.registry }}
@@ -27,11 +32,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -66,8 +70,8 @@ jobs:
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
           format: table
-          exit-code: '1'          # block deployment on CRITICAL findings
-          ignore-unfixed: true    # only fail on fixable vulns
+          exit-code: '1'          # Block deployment on CRITICAL findings
+          ignore-unfixed: true    # Only fail on fixable vulns
           severity: 'CRITICAL'
 
   # ── JOB 2: Deploy to EC2 ─────────────────────────────────────
@@ -77,12 +81,15 @@ jobs:
     needs: build
     environment: production
 
+    permissions:
+      id-token: write   # Required for OIDC token request
+      contents: read
+
     steps:
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy via SSM (no SSH keys needed!)
@@ -150,6 +157,7 @@ jobs:
           echo "| Image | \`${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Git SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Deployed at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth | OIDC (no static keys) |" >> $GITHUB_STEP_SUMMARY
           echo "| Status | ✅ Live |" >> $GITHUB_STEP_SUMMARY
 
   # ── JOB 3: Notify on failure ─────────────────────────────────
