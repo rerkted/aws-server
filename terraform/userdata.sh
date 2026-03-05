@@ -12,32 +12,46 @@ echo "=== Bootstrap started at $(date) ==="
 
 # ── 1. Install dependencies ───────────────────────────────────
 yum update -y
-yum install -y docker python3-pip
-pip3 install certbot
+yum install -y docker python3-pip augeas-libs
+
+# Install certbot using pip3 (works on Amazon Linux 2023)
+pip3 install certbot requests
 
 systemctl enable docker
 systemctl start docker
+
+echo "Docker and certbot installed at $(date)"
 
 # ── 2. ECR login ──────────────────────────────────────────────
 aws ecr get-login-password --region "$AWS_REGION" | \
   docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-# ── 3. Start HTTP-only first (no SSL yet) ─────────────────────
+echo "ECR login successful"
+
+# ── 3. Create webroot for certbot challenge ───────────────────
 mkdir -p /var/www/certbot
 
+# ── 4. Start HTTP-only container for ACME challenge ──────────
 docker run -d \
   --name portfolio \
-  --restart always \
+  --restart unless-stopped \
   -p 80:80 \
-  -p 443:443 \
   -v /var/www/certbot:/var/www/certbot \
-  -e SSL_ENABLED=false \
   "$ECR_REGISTRY:latest"
 
-echo "Container started on HTTP, waiting 10s before cert request..."
-sleep 10
+echo "Waiting 15s for nginx to be ready..."
+sleep 15
 
-# ── 4. Issue SSL cert ─────────────────────────────────────────
+# Verify container is running before requesting cert
+if ! docker ps | grep -q portfolio; then
+  echo "ERROR: portfolio container failed to start"
+  docker logs portfolio
+  exit 1
+fi
+
+echo "Container running, requesting SSL cert..."
+
+# ── 5. Issue SSL certificate ──────────────────────────────────
 certbot certonly \
   --webroot \
   --webroot-path /var/www/certbot \
@@ -47,9 +61,9 @@ certbot certonly \
   -d "$DOMAIN" \
   -d "www.$DOMAIN"
 
-echo "SSL cert issued for $DOMAIN"
+echo "SSL cert issued successfully"
 
-# ── 5. Restart container with SSL certs mounted ───────────────
+# ── 6. Restart container with SSL certs mounted ───────────────
 docker stop portfolio && docker rm portfolio
 
 docker run -d \
@@ -61,15 +75,15 @@ docker run -d \
   -v /var/www/certbot:/var/www/certbot \
   "$ECR_REGISTRY:latest"
 
-echo "Container restarted with HTTPS"
+echo "Container restarted with HTTPS at $(date)"
 
-# ── 6. Auto-renewal cron ──────────────────────────────────────
+# ── 7. Auto-renewal cron ──────────────────────────────────────
 cat > /etc/cron.d/certbot-renew << 'CRON'
 0 3,15 * * * root certbot renew --quiet --deploy-hook "docker kill -s HUP portfolio" 2>&1 | logger -t certbot
 CRON
 chmod 644 /etc/cron.d/certbot-renew
 
-# ── 7. ECR token refresh ──────────────────────────────────────
+# ── 8. ECR token refresh cron ─────────────────────────────────
 cat > /etc/cron.d/ecr-login << CRON
 0 */11 * * * root aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY 2>&1 | logger -t ecr-login
 CRON
