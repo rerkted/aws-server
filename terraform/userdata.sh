@@ -76,6 +76,8 @@ docker run -d \
 echo "Container restarted with HTTPS at $(date)"
 
 # ── 7. Auto-renewal cron (runs twice daily) ───────────────────
+mkdir -p /etc/cron.d
+
 cat > /etc/cron.d/certbot-renew << 'CRON'
 0 3,15 * * * root certbot renew --quiet --deploy-hook "docker kill -s HUP portfolio" 2>&1 | logger -t certbot
 CRON
