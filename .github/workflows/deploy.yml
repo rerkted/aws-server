@@ -122,7 +122,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy via SSM
-        timeout-minutes: 10
+        timeout-minutes: 16
         run: |
           PORTFOLIO_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
           AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
@@ -144,7 +144,7 @@ jobs:
               \"docker pull $AI_IMAGE\",
               \"docker stop rerkt-ai || true\",
               \"docker rm rerkt-ai || true\",
-              \"docker run -d --name rerkt-ai --restart always -p 127.0.0.1:3001:3001 -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} $AI_IMAGE\",
+              \"docker run -d --name rerkt-ai --restart always -p 172.17.0.1:3001:3001 -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} $AI_IMAGE\",
 
               \"docker image prune -f\"
             ]" \
@@ -154,14 +154,14 @@ jobs:
           echo "Command ID: $COMMAND"
 
           # Poll until complete — ssm wait has a hardcoded 100s limit which is too short
-          for i in $(seq 1 40); do
+          for i in $(seq 1 60); do
             sleep 15
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND" \
               --instance-id "$INSTANCE_ID" \
               --query "Status" \
               --output text 2>/dev/null || echo "Pending")
-            echo "[$i/40] Status: $STATUS"
+            echo "[$i/60] Status: $STATUS"
             if [ "$STATUS" = "Success" ] || [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
               break
             fi

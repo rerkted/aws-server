@@ -83,6 +83,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' })); // prevent large payload attacks
 
+// Trust nginx reverse proxy for accurate IP rate limiting
+app.set('trust proxy', 1);
+
 // ─── RATE LIMITING ─────────────────────────────────────────────
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
