@@ -13,6 +13,7 @@ env:
   AWS_REGION: us-east-1
   IMAGE_NAME: portfolio
   AI_IMAGE_NAME: rerkt-ai
+  BEDROCK_IMAGE_NAME: bedrock-ai
 
 jobs:
   # ── JOB 1: Build & Push Docker Images ────────────────────────
@@ -60,6 +61,15 @@ jobs:
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest
 
+      - name: Extract metadata (bedrock proxy)
+        id: meta-bedrock
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.BEDROCK_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -85,6 +95,17 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+      - name: Build and push Bedrock proxy image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bedrock
+          push: true
+          tags: ${{ steps.meta-bedrock.outputs.tags }}
+          labels: ${{ steps.meta-bedrock.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
       - name: Scan portfolio image for vulnerabilities
         uses: aquasecurity/trivy-action@0.34.2
         with:
@@ -98,6 +119,15 @@ jobs:
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AI_IMAGE_NAME }}:latest
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL'
+
+      - name: Scan Bedrock proxy image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.34.2
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest
           format: table
           exit-code: '1'
           ignore-unfixed: true
@@ -126,6 +156,7 @@ jobs:
         run: |
           PORTFOLIO_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
           AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
+          BEDROCK_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest"
           INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
           REGISTRY="${{ needs.build.outputs.ecr-registry }}"
 
@@ -145,6 +176,11 @@ jobs:
               \"docker stop rerkt-ai || true\",
               \"docker rm rerkt-ai || true\",
               \"docker run -d --name rerkt-ai --restart always -p 172.17.0.1:3001:3001 -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} $AI_IMAGE\",
+
+              \"docker pull $BEDROCK_IMAGE\",
+              \"docker stop bedrock-ai || true\",
+              \"docker rm bedrock-ai || true\",
+              \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 $BEDROCK_IMAGE\",
 
               \"docker image prune -f\"
             ]" \
@@ -204,6 +240,15 @@ jobs:
             echo "Rerkt.AI health check passed — HTTP $STATUS"
           fi
 
+      - name: Health check — Bedrock AI
+        run: |
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://bedrock.rerktserver.com/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Bedrock AI health check returned HTTP $STATUS (SSL cert may need renewal for new subdomain)"
+          else
+            echo "Bedrock AI health check passed — HTTP $STATUS"
+          fi
+
       - name: Deployment summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -211,6 +256,7 @@ jobs:
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Portfolio | \`${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Rerkt.AI | \`${{ env.AI_IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bedrock AI | \`${{ env.BEDROCK_IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Git SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Auth | OIDC (no static keys) |" >> $GITHUB_STEP_SUMMARY
           echo "| Deployed at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
