@@ -30,7 +30,7 @@ provider "aws" {
   }
 }
 
-# ─── DATA SOURCES ─────────────────────────────────────────────
+## ─── DATA SOURCES ─────────────────────────────────────────────
 
 data "aws_ami" "amazon_linux" {
   most_recent = true
