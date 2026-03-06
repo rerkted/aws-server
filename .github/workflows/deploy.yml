@@ -1,4 +1,4 @@
-# ─── .github/workflows/deploy.yml ─────────────────────────────
+## ─── .github/workflows/deploy.yml ─────────────────────────────
 # Full CI/CD: Push → Build images → Push to ECR → Deploy to EC2
 # Auth: OIDC federation — no long-lived AWS access keys
 
