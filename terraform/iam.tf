@@ -27,6 +27,27 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Bedrock — allows EC2 to call AWS Bedrock without API keys
+resource "aws_iam_role_policy" "bedrock_invoke" {
+  name = "bedrock-invoke-policy"
+  role = aws_iam_role.ec2_portfolio.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "BedrockInvoke"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "portfolio" {
   name = "portfolio-instance-profile"
   role = aws_iam_role.ec2_portfolio.name
