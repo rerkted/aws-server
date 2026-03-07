@@ -26,6 +26,7 @@ resource "aws_instance" "portfolio" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [ami]
   }
 
   tags = { Name = "portfolio-ec2" }
