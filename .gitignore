@@ -1,15 +1,10 @@
-cd portfolio
-```
-
-Create a file called `.gitignore` with this content:
-```
-# Never commit these
+# Terraform
 terraform/.terraform/
-terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/terraform.tfvars
 terraform/*.tfplan
-.DS_Store.DS_Store
+
+# Local
 .DS_Store
 CLAUDE.md
