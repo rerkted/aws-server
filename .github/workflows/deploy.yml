@@ -182,7 +182,10 @@ jobs:
               \"docker rm bedrock-ai || true\",
               \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 $BEDROCK_IMAGE\",
 
-              \"docker image prune -f\"
+              \"docker image prune -f\",
+
+              \"# ── Ensure Promtail is running (log shipping to Loki)\",
+              \"systemctl is-active promtail || systemctl start promtail\"
             ]" \
             --query "Command.CommandId" \
             --output text)

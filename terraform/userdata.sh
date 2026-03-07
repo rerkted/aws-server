@@ -89,4 +89,85 @@ cat > /etc/cron.d/ecr-login << CRON
 CRON
 chmod 644 /etc/cron.d/ecr-login
 
+# ── 9. Install Promtail for log shipping to Grafana Loki ─────
+PROMTAIL_VERSION="2.9.0"
+curl -fsSL "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip" \
+  -o /tmp/promtail.zip
+unzip -o /tmp/promtail.zip -d /tmp
+mv /tmp/promtail-linux-amd64 /usr/local/bin/promtail
+chmod +x /usr/local/bin/promtail
+rm /tmp/promtail.zip
+
+cat > /etc/promtail-config.yml << 'PROMTAIL_CONF'
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: ${loki_url}
+
+scrape_configs:
+  # Docker container logs — portfolio, rerkt-ai, bedrock-ai
+  - job_name: portfolio-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        regex: /(.*)
+        target_label: container
+      - source_labels: [__meta_docker_container_image]
+        target_label: image
+      - source_labels: [container]
+        regex: (.+)
+        action: keep
+    pipeline_stages:
+      - docker: {}
+
+  # Auth logs — SSH logins, sudo usage (CSPM)
+  - job_name: auth
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: auth
+          host: rerktserver.com
+          __path__: /var/log/secure
+
+  # System logs (CSPM)
+  - job_name: system
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          host: rerktserver.com
+          __path__: /var/log/messages
+PROMTAIL_CONF
+
+mkdir -p /var/lib/promtail
+usermod -aG docker root
+
+cat > /etc/systemd/system/promtail.service << 'SYSTEMD'
+[Unit]
+Description=Promtail log shipper
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail-config.yml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD
+
+systemctl daemon-reload
+systemctl enable promtail
+systemctl start promtail
+
+echo "Promtail installed and shipping logs to Loki"
+
 echo "=== Bootstrap complete at $(date) ==="

@@ -51,3 +51,8 @@ variable "github_repo" {
   type        = string
   default     = "aws-server"
 }
+
+variable "loki_url" {
+  description = "Loki push URL on Grafana EC2 e.g. http://<grafana-eip>:3100/loki/api/v1/push"
+  type        = string
+}
