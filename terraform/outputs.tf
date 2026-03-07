@@ -3,12 +3,12 @@
 
 output "public_ip" {
   value       = aws_eip.portfolio.public_ip
-  description = "Portfolio public IP — update GitHub secret EC2_PUBLIC_IP with this"
+  description = "Portfolio public IP — stored automatically in SSM at /rerktserver/portfolio/eip"
 }
 
 output "instance_id" {
   value       = aws_instance.portfolio.id
-  description = "EC2 instance ID — update GitHub secret EC2_INSTANCE_ID with this"
+  description = "EC2 instance ID — stored automatically in SSM at /rerktserver/portfolio/instance-id"
 }
 
 output "ecr_repository_url" {
