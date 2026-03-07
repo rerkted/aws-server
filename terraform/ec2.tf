@@ -22,7 +22,6 @@ resource "aws_instance" "portfolio" {
     aws_region   = var.aws_region
     domain_name  = var.domain_name
     admin_email  = var.admin_email
-    loki_url     = var.loki_url
   }))
 
   lifecycle {
@@ -39,4 +38,21 @@ resource "aws_eip" "portfolio" {
   domain   = "vpc"
 
   tags = { Name = "portfolio-eip" }
+}
+
+# Store portfolio EIP and instance ID in SSM — deploy workflow reads these dynamically
+resource "aws_ssm_parameter" "portfolio_eip" {
+  name  = "/rerktserver/portfolio/eip"
+  type  = "String"
+  value = aws_eip.portfolio.public_ip
+
+  tags = { Name = "portfolio-eip" }
+}
+
+resource "aws_ssm_parameter" "portfolio_instance_id" {
+  name  = "/rerktserver/portfolio/instance-id"
+  type  = "String"
+  value = aws_instance.portfolio.id
+
+  tags = { Name = "portfolio-instance-id" }
 }

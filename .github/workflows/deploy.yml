@@ -157,7 +157,10 @@ jobs:
           PORTFOLIO_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
           AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
           BEDROCK_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest"
-          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
+          INSTANCE_ID=$(aws ssm get-parameter \
+            --name "/rerktserver/portfolio/instance-id" \
+            --query "Parameter.Value" \
+            --output text)
           REGISTRY="${{ needs.build.outputs.ecr-registry }}"
 
           COMMAND=$(aws ssm send-command \
@@ -227,7 +230,8 @@ jobs:
       - name: Health check — portfolio
         run: |
           sleep 10
-          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://${{ secrets.EC2_PUBLIC_IP }}/health)
+          PORTFOLIO_IP=$(aws ssm get-parameter --name "/rerktserver/portfolio/eip" --query "Parameter.Value" --output text)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://$PORTFOLIO_IP/health)
           if [ "$STATUS" != "200" ]; then
             echo "Portfolio health check failed — HTTP $STATUS"
             exit 1
