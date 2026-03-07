@@ -310,6 +310,12 @@
         <div class="project-tech"><span class="tag">Grafana</span><span class="tag">Loki</span><span class="tag">Promtail</span><span class="tag">Docker Compose</span><span class="tag">EC2</span><span class="tag">VPC</span><span class="tag">nginx</span><span class="tag">Terraform</span></div>
         <a href="https://grafana.rerktserver.com" target="_blank" class="project-link">View dashboard &rarr;</a>
       </div>
+      <div class="project-card">
+        <div class="project-number">Project 09</div>
+        <div class="project-name">Zero Hardcoded Infrastructure &mdash; SSM Parameter Store</div>
+        <div class="project-desc">Eliminated all hardcoded IPs and instance IDs from GitHub secrets and CI/CD pipelines. EC2 instance IDs and Elastic IPs are now written to AWS SSM Parameter Store by Terraform on every apply. GitHub Actions workflows query SSM at runtime to discover targets dynamically &mdash; no manual secret rotation when infrastructure is destroyed and recreated. The Grafana security group automatically locks to the portfolio EC2&rsquo;s current EIP, and Promtail reads the Loki endpoint from SSM at boot. Zero static credentials, zero manual updates.</div>
+        <div class="project-tech"><span class="tag">AWS SSM Parameter Store</span><span class="tag">Terraform</span><span class="tag">GitHub Actions</span><span class="tag">IAM</span><span class="tag">Dynamic Config</span></div>
+      </div>
     </div>
   </section>
 

@@ -90,15 +90,23 @@ CRON
 chmod 644 /etc/cron.d/ecr-login
 
 # ── 9. Install Promtail for log shipping to Grafana Loki ─────
+# Read Grafana EIP from SSM Parameter Store (set by aws-grafana terraform)
+GRAFANA_EIP=$(aws ssm get-parameter \
+  --region "${aws_region}" \
+  --name "/rerktserver/grafana/eip" \
+  --query "Parameter.Value" \
+  --output text)
+LOKI_URL="http://$${GRAFANA_EIP}:3100/loki/api/v1/push"
+
 PROMTAIL_VERSION="2.9.0"
-curl -fsSL "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip" \
+curl -fsSL "https://github.com/grafana/loki/releases/download/v$${PROMTAIL_VERSION}/promtail-linux-amd64.zip" \
   -o /tmp/promtail.zip
 unzip -o /tmp/promtail.zip -d /tmp
 mv /tmp/promtail-linux-amd64 /usr/local/bin/promtail
 chmod +x /usr/local/bin/promtail
 rm /tmp/promtail.zip
 
-cat > /etc/promtail-config.yml << 'PROMTAIL_CONF'
+cat > /etc/promtail-config.yml << PROMTAIL_CONF
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
@@ -107,7 +115,7 @@ positions:
   filename: /var/lib/promtail/positions.yaml
 
 clients:
-  - url: ${loki_url}
+  - url: $LOKI_URL
 
 scrape_configs:
   # Docker container logs — portfolio, rerkt-ai, bedrock-ai

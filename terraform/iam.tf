@@ -58,6 +58,21 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
   })
 }
 
+# SSM Parameter Store — read Grafana EIP at boot for Promtail config
+resource "aws_iam_role_policy" "ssm_parameters" {
+  name = "ssm-parameter-read"
+  role = aws_iam_role.ec2_portfolio.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter"]
+      Resource = "arn:aws:ssm:us-east-1:*:parameter/rerktserver/*"
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "portfolio" {
   name = "portfolio-instance-profile"
   role = aws_iam_role.ec2_portfolio.name

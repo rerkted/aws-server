@@ -104,7 +104,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ssm:SendCommand",
           "ssm:GetCommandInvocation",
           "ssm:ListCommandInvocations",
-          "ssm:DescribeInstanceInformation"
+          "ssm:DescribeInstanceInformation",
+          "ssm:GetParameter"
         ]
         Resource = "*"
       },
