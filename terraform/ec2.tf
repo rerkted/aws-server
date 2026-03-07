@@ -1,5 +1,5 @@
 # ─── ec2.tf ───────────────────────────────────────────────────
-# EC2 instance and Elastic IP
+## EC2 instance and Elastic IP
 
 resource "aws_instance" "portfolio" {
   ami                    = data.aws_ami.amazon_linux.id

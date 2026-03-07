@@ -9,7 +9,7 @@
 #   4. No AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY needed
 
 # ─── OIDC IDENTITY PROVIDER ───────────────────────────────────
-# Tells AWS to trust tokens issued by GitHub Actions
+## Tells AWS to trust tokens issued by GitHub Actions
 
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
