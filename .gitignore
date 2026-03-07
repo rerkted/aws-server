@@ -12,3 +12,4 @@ terraform/terraform.tfvars
 terraform/*.tfplan
 .DS_Store.DS_Store
 .DS_Store
+CLAUDE.md
