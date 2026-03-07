@@ -46,10 +46,11 @@ resource "aws_iam_role" "github_actions_oidc" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            # Only main branch and PR branches can assume this role
+            # Only main branch of trusted repos can assume this role
             "token.actions.githubusercontent.com:sub" = [
               "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main",
-              "repo:${var.github_org}/${var.github_repo}:environment:production"
+              "repo:${var.github_org}/${var.github_repo}:environment:production",
+              "repo:${var.github_org}/aws-grafana:ref:refs/heads/main"
             ]
           }
         }
