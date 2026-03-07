@@ -1,47 +1,48 @@
-# 🚀 Portfolio Infrastructure — rerktserver.com
+# Portfolio Infrastructure — rerktserver.com
 
-A **cost-effective**, **secure**, and **fully automated** portfolio website for Edward Rerkphuritat, built with DevSecOps best practices end-to-end.
+A cost-effective, secure, and fully automated portfolio website built with DevSecOps best practices end-to-end.
 
 [![Build & Deploy](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml/badge.svg)](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml)
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 Git Push to main
       │
       ▼
-GitHub Actions
+GitHub Actions (OIDC — no static AWS keys)
       │
-      ├── 🐳 Docker build (linux/amd64)
-      ├── 🔍 Trivy vulnerability scan (blocks on CRITICAL)
-      ├── 📦 Push to ECR
+      ├── Docker build (linux/amd64)
+      ├── Trivy vulnerability scan (blocks on CRITICAL)
+      ├── Push to ECR
       │
-      └── 🚀 SSM deploy → EC2 pull & run
+      └── SSM deploy → EC2 pull & run
                               │
                               ▼
-                     nginx:1.27-alpine container
+                     portfolio   → nginx reverse proxy (rerktserver.com)
+                     rerkt-ai    → Claude API proxy (ai.rerktserver.com)
+                     bedrock-ai  → AWS Bedrock proxy (bedrock.rerktserver.com)
                      HTTPS via Let's Encrypt
-                     serving rerktserver.com
 ```
 
 ---
 
-## 💰 Cost Breakdown
+## Cost Breakdown
 
-| Resource         | Cost       |
-|------------------|------------|
-| EC2 t3.nano      | ~$3.50/mo  |
-| EBS gp3 30GB     | ~$2.40/mo  |
-| Elastic IP       | Free while attached |
-| ECR (5 images)   | ~$0.05/mo  |
-| Data transfer    | ~$0.50/mo  |
-| **Total**        | **~$6.50/mo** |
+| Resource | Cost |
+|----------|------|
+| EC2 t3.nano | ~$3.50/mo |
+| EBS gp3 30GB | ~$2.40/mo |
+| Elastic IP | Free while attached |
+| ECR (images) | ~$0.05/mo |
+| Data transfer | ~$0.50/mo |
+| **Total** | **~$6.50/mo** |
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -51,18 +52,14 @@ GitHub Actions
 - An existing EC2 key pair in AWS
 - Domain registered in Route53
 
-### 1. Deploy Infrastructure
+### 1. Deploy aws-server first (required — stores EIP in SSM for Grafana)
 
 ```bash
 cd terraform
-
-# Copy and fill in your values
 cp terraform.tfvars.example terraform.tfvars
-nano terraform.tfvars
+vi terraform.tfvars   # fill in your values
 
-# Deploy
 terraform init
-terraform plan
 terraform apply
 ```
 
@@ -70,160 +67,126 @@ terraform apply
 
 Go to your repo → **Settings → Secrets and variables → Actions**:
 
-| Secret | Value |
-|--------|-------|
-| `AWS_ACCESS_KEY_ID` | IAM user access key |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
-| `EC2_INSTANCE_ID` | From `terraform output instance_id` |
-| `EC2_PUBLIC_IP` | From `terraform output public_ip` |
+| Secret | Description |
+|--------|-------------|
+| `AWS_OIDC_ROLE_ARN` | From `terraform output oidc_role_arn` |
+| `ANTHROPIC_API_KEY` | Anthropic API key for rerkt-ai container |
+
+No static AWS keys, no instance IDs, no IPs — all handled via OIDC and SSM Parameter Store.
 
 ### 3. Push to Deploy
 
 ```bash
-git add .
-git commit -m "feat: update portfolio"
 git push origin main
-# → GitHub Actions automatically builds, scans, and deploys
+# GitHub Actions automatically builds, scans, and deploys
 ```
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 aws-server/
 ├── website/
 │   └── index.html              # Portfolio site
+├── chat/                       # Rerkt.AI proxy (Claude API)
+├── bedrock/                    # Bedrock AI proxy (AWS Bedrock)
 ├── terraform/
-│   ├── main.tf                 # VPC, EC2, ECR, IAM, Route53
+│   ├── main.tf                 # Provider, backend
+│   ├── vpc.tf                  # VPC, subnet, routing
+│   ├── ec2.tf                  # EC2, EIP, SSM parameters
+│   ├── ecr.tf                  # ECR repositories
+│   ├── iam.tf                  # EC2 instance role
+│   ├── oidc.tf                 # GitHub Actions OIDC federation
+│   ├── security.tf             # Security group
+│   ├── route53.tf              # DNS records
+│   ├── userdata.sh             # EC2 bootstrap script
 │   ├── variables.tf            # Input variables
-│   ├── userdata.sh             # EC2 bootstrap — installs Docker, Certbot, issues SSL cert
 │   └── terraform.tfvars.example
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml          # CI/CD pipeline
 ├── Dockerfile                  # nginx:1.27-alpine golden image
-├── nginx.conf                  # HTTP-only config (used on first boot for ACME challenge)
-├── nginx-ssl.conf              # Full HTTPS config (used after cert is issued)
-└── README.md
+├── nginx.conf                  # HTTP-only config (ACME challenge)
+├── nginx-ssl.conf              # Full HTTPS config
+└── RUNBOOK.md                  # Operational procedures
 ```
 
 ---
 
-## 🔐 SSL / HTTPS
+## SSL / HTTPS
 
-Certificates are fully automated via **Let's Encrypt + Certbot** on first EC2 boot:
+Certificates are fully automated via Let's Encrypt + Certbot on first EC2 boot:
 
 ```
 userdata.sh runs on first boot:
   1. Docker installed, ECR image pulled
-  2. nginx starts on HTTP port 80 (nginx.conf — no SSL required)
-  3. Certbot requests cert via ACME webroot challenge
+  2. nginx starts on HTTP port 80 (ACME challenge)
+  3. Certbot requests cert via webroot challenge
   4. Cert issued → /etc/letsencrypt/live/rerktserver.com/
   5. Container restarts with HTTPS using nginx-ssl.conf
 
-Auto-renewal (cron, twice daily — 3am & 3pm):
+Auto-renewal (cron, twice daily — 3am & 3pm UTC):
   └── certbot renew → SIGHUP nginx (zero downtime)
 ```
 
-### Cert expiry safety net
-
-| Event | Timing |
-|-------|--------|
-| Cert validity | 90 days |
-| Auto-renewal trigger | < 30 days remaining |
-| Cron schedule | Twice daily (3am, 3pm UTC) |
-
-### Verify on the server
-
-```bash
-sudo certbot certificates          # View cert + expiry
-sudo certbot renew --dry-run       # Test renewal
-sudo tail -f /var/log/syslog | grep certbot
-```
-
 ---
 
-## 🛡️ Security Features
+## Security
 
 ### Infrastructure
-- ✅ EC2 IAM instance role — no hardcoded credentials
-- ✅ SSH restricted to your IP only (`your_ip_cidr` in tfvars)
-- ✅ SSM-based deployment — no SSH port exposed in CI/CD
-- ✅ Encrypted EBS volume (gp3)
-- ✅ ECR image scanning on push
+- EC2 IAM instance role — no hardcoded credentials
+- SSH restricted to your IP only (`your_ip_cidr` in tfvars)
+- SSM-based deployment — no SSH in CI/CD pipeline
+- Encrypted EBS volume (gp3)
 
 ### CI/CD Pipeline
-- ✅ Trivy vulnerability scanning — blocks deployment on CRITICAL CVEs
-- ✅ `apk upgrade` in Dockerfile — patches all OS packages at build time
-- ✅ Pinned action versions — prevents supply chain attacks
-- ✅ SSM command status verification — detects silent deploy failures
-- ✅ 10-minute pipeline timeout
+- GitHub Actions OIDC federation — no static AWS access keys
+- Instance ID and public IP read from SSM Parameter Store at runtime — no secrets to rotate
+- Trivy vulnerability scanning — blocks on CRITICAL CVEs
+- `apk upgrade` in Dockerfile — patches OS packages at build time
+- Pinned action versions — prevents supply chain attacks
 
 ### nginx / HTTPS
-- ✅ TLS 1.2 and 1.3 only
-- ✅ HSTS with 2-year max-age + includeSubDomains
-- ✅ Rate limiting (20 req/s general, 2 req/min contact)
-- ✅ Security headers: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
-- ✅ Static asset caching with immutable Cache-Control
+- TLS 1.2 and 1.3 only
+- HSTS with 2-year max-age + includeSubDomains
+- Rate limiting (20 req/s general, 2 req/min contact form)
+- Security headers: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
 
 ### IAM Least Privilege
-The `github-actions-portfolio` IAM user has only the minimum permissions needed:
-- ECR: push/pull to the `portfolio` repository only
-- SSM: send and check commands
+
+The GitHub Actions OIDC role (`github-actions-oidc-role`) has only:
+- ECR: push/pull to portfolio repositories
+- SSM: send commands, get command status, read parameters
 - EC2: describe instances
 
----
-
-## 🔧 Customization
-
-**Change instance type:**
-```hcl
-# terraform.tfvars
-instance_type = "t3.micro"   # $7.50/mo
-instance_type = "t3.small"   # $15/mo
-```
-
-**Scale up (if traffic grows):**
-Replace EC2 with ECS Fargate or add ALB + Auto Scaling — the same Docker image works everywhere.
+No long-lived access keys. GitHub requests a short-lived token scoped to the repo + branch at runtime via OIDC federation.
 
 ---
 
-## 🔄 Re-deploying / Rebuilding EC2
+## SSM Parameter Store
 
-If you ever need to destroy and recreate the EC2:
+Terraform writes these parameters automatically on every `apply`:
 
-```bash
-cd terraform
+| Parameter | Value | Used by |
+|-----------|-------|---------|
+| `/rerktserver/portfolio/eip` | Portfolio Elastic IP | aws-grafana security group |
+| `/rerktserver/portfolio/instance-id` | EC2 instance ID | GitHub Actions deploy workflow |
 
-# Destroy only EC2 and Elastic IP (keeps ECR, VPC, Route53)
-terraform destroy \
-  -target=aws_eip.portfolio \
-  -target=aws_instance.portfolio
-
-# Recreate — userdata.sh runs automatically on first boot
-terraform apply
-```
-
-After `terraform apply`:
-1. Update `EC2_INSTANCE_ID` and `EC2_PUBLIC_IP` in GitHub Secrets
-2. Watch bootstrap: `ssh -i ~/.ssh/your-key.pem ec2-user@NEW_IP`
-3. `sudo tail -f /var/log/portfolio-bootstrap.log`
-4. Wait for `=== Bootstrap complete ===`
-5. Re-run GitHub Actions pipeline
+The deploy workflow reads the instance ID from SSM at runtime — no manual secret updates needed when infrastructure is rebuilt.
 
 ---
 
-## 📊 Monitoring (Optional)
+## Monitoring
 
-```bash
-# CloudWatch basic metrics are free
-# Add to userdata.sh:
-yum install -y amazon-cloudwatch-agent
-```
+Log observability is handled by the companion [aws-grafana](https://github.com/rerkted/aws-grafana) stack:
+
+- **Grafana** dashboard at [grafana.rerktserver.com](https://grafana.rerktserver.com)
+- **Promtail** runs as a systemd service on this EC2, shipping logs to Loki
+- Logs collected: Docker container stdout, `/var/log/secure` (auth/CSPM), `/var/log/messages`
 
 ---
 
-## 🌐 Live Site
+## Live Site
 
 **[https://rerktserver.com](https://rerktserver.com)**
