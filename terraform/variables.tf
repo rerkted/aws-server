@@ -51,3 +51,9 @@ variable "github_repo" {
   type        = string
   default     = "aws-server"
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key — stored in AWS Secrets Manager, never in GitHub secrets"
+  type        = string
+  sensitive   = true
+}

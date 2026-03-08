@@ -65,11 +65,19 @@ resource "aws_iam_role_policy" "ssm_parameters" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["ssm:GetParameter"]
-      Resource = "arn:aws:ssm:us-east-1:*:parameter/rerktserver/*"
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:us-east-1:*:parameter/rerktserver/*"
+      },
+      {
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:us-east-1:*:secret:/rerktserver/*"
+      }
+    ]
   })
 }
 
