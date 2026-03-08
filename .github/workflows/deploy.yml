@@ -178,7 +178,7 @@ jobs:
               \"docker pull $AI_IMAGE\",
               \"docker stop rerkt-ai || true\",
               \"docker rm rerkt-ai || true\",
-              \"ANTHROPIC_KEY=\$(aws secretsmanager get-secret-value --secret-id /rerktserver/anthropic-api-key --query SecretString --output text --region ${{ env.AWS_REGION }})\",
+              \"ANTHROPIC_KEY=\$(aws ssm get-parameter --name /rerktserver/anthropic-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
               \"docker run -d --name rerkt-ai --restart always -p 172.17.0.1:3001:3001 -e ANTHROPIC_API_KEY=\$ANTHROPIC_KEY $AI_IMAGE\",
 
               \"docker pull $BEDROCK_IMAGE\",

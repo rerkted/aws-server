@@ -155,14 +155,34 @@ sudo tail -f /var/log/portfolio-bootstrap.log
 
 ---
 
+## Rotate Anthropic API Key
+
+1. Get a new key from [console.anthropic.com](https://console.anthropic.com)
+2. Update SSM:
+
+```bash
+aws ssm put-parameter \
+  --name "/rerktserver/anthropic-api-key" \
+  --value "sk-ant-NEW-KEY-HERE" \
+  --type SecureString \
+  --overwrite
+```
+
+3. Redeploy so the container restarts with the new key:
+
+```bash
+git commit --allow-empty -m "chore: rotate anthropic api key" && git push
+```
+
+---
+
 ## GitHub Secrets Required
 
 | Secret | Description |
 |--------|-------------|
 | `AWS_OIDC_ROLE_ARN` | GitHub Actions OIDC role ARN |
-| `ANTHROPIC_API_KEY` | Anthropic API key for rerkt-ai |
 
-Instance IDs and IPs are read from SSM automatically — no secrets needed for those.
+All other credentials (Anthropic API key, instance IDs, IPs) are read from SSM automatically.
 
 ---
 

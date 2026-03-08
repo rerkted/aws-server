@@ -72,10 +72,10 @@ resource "aws_iam_role_policy" "ssm_parameters" {
         Resource = "arn:aws:ssm:us-east-1:*:parameter/rerktserver/*"
       },
       {
-        Sid      = "SecretsManager"
+        Sid      = "KMSDecrypt"
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:us-east-1:*:secret:/rerktserver/*"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
       }
     ]
   })
