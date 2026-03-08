@@ -28,6 +28,7 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 }
 
 # Bedrock — allows EC2 to call AWS Bedrock without API keys
+#checkov:skip=CKV_AWS_355:aws-marketplace:Subscribe requires wildcard resource — no resource-level restriction supported by AWS
 resource "aws_iam_role_policy" "bedrock_invoke" {
   name = "bedrock-invoke-policy"
   role = aws_iam_role.ec2_portfolio.name
@@ -59,6 +60,8 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
 }
 
 # SSM Parameter Store — read Grafana EIP at boot for Promtail config
+#checkov:skip=CKV_AWS_290:kms:Decrypt requires wildcard resource — KMS key ARNs are dynamic and not known at Terraform time
+#checkov:skip=CKV_AWS_288:kms:Decrypt is scoped to rerktserver SSM parameters only; wildcard is on the KMS action not SSM
 resource "aws_iam_role_policy" "ssm_parameters" {
   name = "ssm-parameter-read"
   role = aws_iam_role.ec2_portfolio.name

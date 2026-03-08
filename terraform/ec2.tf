@@ -1,6 +1,8 @@
 # ─── ec2.tf ───────────────────────────────────────────────────
 ## EC2 instance and Elastic IP
 
+#checkov:skip=CKV_AWS_135:T3 instances are automatically EBS-optimized; explicit flag unsupported
+#checkov:skip=CKV_AWS_126:Detailed monitoring disabled intentionally — cost vs. benefit for t3.nano
 resource "aws_instance" "portfolio" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
@@ -8,6 +10,12 @@ resource "aws_instance" "portfolio" {
   vpc_security_group_ids = [aws_security_group.portfolio.id]
   iam_instance_profile   = aws_iam_instance_profile.portfolio.name
   key_name               = var.key_pair_name
+
+  # CKV_AWS_79: Enforce IMDSv2 — prevents SSRF-based metadata credential theft
+  metadata_options {
+    http_tokens   = "required"
+    http_endpoint = "enabled"
+  }
 
   root_block_device {
     volume_size           = 30
@@ -33,6 +41,7 @@ resource "aws_instance" "portfolio" {
 }
 
 # Static IP — persists across stop/start so DNS never needs updating
+#checkov:skip=CKV2_AWS_34:EIP is a public IP address — not sensitive data requiring SecureString
 resource "aws_eip" "portfolio" {
   instance = aws_instance.portfolio.id
   domain   = "vpc"
@@ -41,6 +50,7 @@ resource "aws_eip" "portfolio" {
 }
 
 # Store portfolio EIP and instance ID in SSM — deploy workflow reads these dynamically
+#checkov:skip=CKV2_AWS_34:EIP is a public IP address — not sensitive data requiring SecureString
 resource "aws_ssm_parameter" "portfolio_eip" {
   name  = "/rerktserver/portfolio/eip"
   type  = "String"
@@ -49,6 +59,7 @@ resource "aws_ssm_parameter" "portfolio_eip" {
   tags = { Name = "portfolio-eip" }
 }
 
+#checkov:skip=CKV2_AWS_34:EC2 instance ID is not sensitive — used for SSM targeting
 resource "aws_ssm_parameter" "portfolio_instance_id" {
   name  = "/rerktserver/portfolio/instance-id"
   type  = "String"

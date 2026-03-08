@@ -1,6 +1,8 @@
 # ─── security.tf ──────────────────────────────────────────────
 # Security groups
 
+#checkov:skip=CKV_AWS_260:Port 80 required for Let's Encrypt ACME webroot challenge and HTTP→HTTPS redirect
+#checkov:skip=CKV_AWS_382:Unrestricted egress required — web server pulls images from ECR, fetches OS updates, calls external APIs
 resource "aws_security_group" "portfolio" {
   name        = "portfolio-sg"
   description = "Portfolio website security group"

@@ -24,7 +24,7 @@ jobs:
       terraform-dir: terraform
       node-dirs: '. chat bedrock'
       language: javascript
-      fail-on-findings: false
+      severity-threshold: HIGH
     permissions:
       security-events: write
       actions: read
