@@ -1,5 +1,5 @@
-## ─── .github/workflows/deploy.yml ─────────────────────────────
-# Full CI/CD: Push → Build images → Push to ECR → Deploy to EC2
+# ─── .github/workflows/deploy.yml ────────────────────────────────
+# Full CI/CD: Security → Build → Deploy → Verify → DAST → Cleanup → Done
 # Auth: OIDC federation — no long-lived AWS access keys
 
 name: Build & Deploy Portfolio
@@ -16,11 +16,25 @@ env:
   BEDROCK_IMAGE_NAME: bedrock-ai
 
 jobs:
-  # ── JOB 1: Build & Push Docker Images ────────────────────────
-  build:
-    name: Build & Push Images
-    runs-on: ubuntu-latest
+  # ── STAGE 1: Security Scans ───────────────────────────────────
+  security:
+    name: "Stage 1 — Security"
+    uses: rerkted/devsecops-pipeline/.github/workflows/security.yml@main
+    with:
+      terraform-dir: terraform
+      node-dirs: '. chat bedrock'
+      language: javascript
+      fail-on-findings: false
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
 
+  # ── STAGE 2: Build & Push Docker Images ───────────────────────
+  build:
+    name: "Stage 2 — Build"
+    runs-on: ubuntu-latest
+    needs: security
     permissions:
       id-token: write
       contents: read
@@ -106,7 +120,7 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Scan portfolio image for vulnerabilities
+      - name: Scan portfolio image (Trivy)
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
@@ -115,7 +129,7 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL'
 
-      - name: Scan AI proxy image for vulnerabilities
+      - name: Scan Rerkt.AI image (Trivy)
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AI_IMAGE_NAME }}:latest
@@ -124,7 +138,7 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL'
 
-      - name: Scan Bedrock proxy image for vulnerabilities
+      - name: Scan Bedrock AI image (Trivy)
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest
@@ -133,13 +147,12 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL'
 
-  # ── JOB 2: Deploy to EC2 ─────────────────────────────────────
+  # ── STAGE 3: Deploy to EC2 ────────────────────────────────────
   deploy:
-    name: Deploy to EC2
+    name: "Stage 3 — Deploy"
     runs-on: ubuntu-latest
     needs: build
     environment: production
-
     permissions:
       id-token: write
       contents: read
@@ -186,9 +199,6 @@ jobs:
               \"docker rm bedrock-ai || true\",
               \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 $BEDROCK_IMAGE\",
 
-              \"docker image prune -f\",
-
-              \"# ── Ensure Promtail is running (log shipping to Loki)\",
               \"systemctl is-active promtail || systemctl start promtail\"
             ]" \
             --query "Command.CommandId" \
@@ -196,7 +206,6 @@ jobs:
 
           echo "Command ID: $COMMAND"
 
-          # Poll until complete — ssm wait has a hardcoded 100s limit which is too short
           for i in $(seq 1 240); do
             sleep 15
             STATUS=$(aws ssm get-command-invocation \
@@ -204,7 +213,7 @@ jobs:
               --instance-id "$INSTANCE_ID" \
               --query "Status" \
               --output text 2>/dev/null || echo "Pending")
-            echo "[$i/60] Status: $STATUS"
+            echo "[$i/240] Status: $STATUS"
             if [ "$STATUS" = "Success" ] || [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
               break
             fi
@@ -228,10 +237,28 @@ jobs:
 
           echo "Deployment complete"
 
-      - name: Health check — portfolio
+  # ── STAGE 4: Verify ───────────────────────────────────────────
+  verify:
+    name: "Stage 4 — Verify"
+    runs-on: ubuntu-latest
+    needs: deploy
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Health check — Portfolio
         run: |
           sleep 10
-          PORTFOLIO_IP=$(aws ssm get-parameter --name "/rerktserver/portfolio/eip" --query "Parameter.Value" --output text)
+          PORTFOLIO_IP=$(aws ssm get-parameter \
+            --name "/rerktserver/portfolio/eip" \
+            --query "Parameter.Value" --output text)
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://$PORTFOLIO_IP/health)
           if [ "$STATUS" != "200" ]; then
             echo "Portfolio health check failed — HTTP $STATUS"
@@ -243,40 +270,59 @@ jobs:
         run: |
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://ai.rerktserver.com/health)
           if [ "$STATUS" != "200" ]; then
-            echo "Rerkt.AI health check returned HTTP $STATUS (SSL cert may need renewal for new subdomain)"
-          else
-            echo "Rerkt.AI health check passed — HTTP $STATUS"
+            echo "Rerkt.AI health check failed — HTTP $STATUS"
+            exit 1
           fi
+          echo "Rerkt.AI health check passed — HTTP $STATUS"
 
       - name: Health check — Bedrock AI
         run: |
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://bedrock.rerktserver.com/health)
           if [ "$STATUS" != "200" ]; then
-            echo "Bedrock AI health check returned HTTP $STATUS (SSL cert may need renewal for new subdomain)"
-          else
-            echo "Bedrock AI health check passed — HTTP $STATUS"
+            echo "Bedrock AI health check failed — HTTP $STATUS"
+            exit 1
           fi
+          echo "Bedrock AI health check passed — HTTP $STATUS"
 
-      - name: Deployment summary
-        run: |
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Portfolio | \`${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rerkt.AI | \`${{ env.AI_IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Bedrock AI | \`${{ env.BEDROCK_IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Git SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Auth | OIDC (no static keys) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deployed at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | Live |" >> $GITHUB_STEP_SUMMARY
+  # ── STAGE 5: DAST ─────────────────────────────────────────────
+  dast:
+    name: "Stage 5 — DAST"
+    needs: verify
+    uses: rerkted/devsecops-pipeline/.github/workflows/dast.yml@main
+    with:
+      target-url: https://rerktserver.com
+      fail-on-findings: false
+    permissions:
+      contents: read
+      issues: write
 
-  # ── JOB 3: Notify on failure ─────────────────────────────────
-  notify-failure:
-    name: Notify on Failure
-    runs-on: ubuntu-latest
-    needs: [build, deploy]
-    if: failure()
-    steps:
-      - name: Send failure notification
-        run: |
-          echo "Pipeline failed. Check GitHub Actions for details."
+  # ── STAGE 6: Cleanup ──────────────────────────────────────────
+  cleanup:
+    name: "Stage 6 — Cleanup"
+    needs: dast
+    uses: rerkted/devsecops-pipeline/.github/workflows/cleanup.yml@main
+    with:
+      ssm-instance-param: /rerktserver/portfolio/instance-id
+      role-arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      aws-region: us-east-1
+    permissions:
+      id-token: write
+      contents: read
+
+  # ── STAGE 7: Done ─────────────────────────────────────────────
+  done:
+    name: "Stage 7 — Done"
+    needs: [security, build, deploy, verify, dast, cleanup]
+    if: always()
+    uses: rerkted/devsecops-pipeline/.github/workflows/done.yml@main
+    with:
+      security-result: ${{ needs.security.result }}
+      build-result: ${{ needs.build.result }}
+      deploy-result: ${{ needs.deploy.result }}
+      verify-result: ${{ needs.verify.result }}
+      dast-result: ${{ needs.dast.result }}
+      cleanup-result: ${{ needs.cleanup.result }}
+      service-name: Portfolio — rerktserver.com
+      service-url: https://rerktserver.com
+    permissions:
+      contents: read
