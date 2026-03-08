@@ -303,8 +303,9 @@ jobs:
     uses: rerkted/devsecops-pipeline/.github/workflows/cleanup.yml@main
     with:
       ssm-instance-param: /rerktserver/portfolio/instance-id
-      role-arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
       aws-region: us-east-1
+    secrets:
+      role-arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
     permissions:
       id-token: write
       contents: read
