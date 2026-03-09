@@ -291,7 +291,7 @@ jobs:
     uses: rerkted/devsecops-pipeline/.github/workflows/dast.yml@main
     with:
       target-url: https://rerktserver.com
-      fail-on-findings: false
+      severity-threshold: HIGH
     permissions:
       contents: read
       issues: write
