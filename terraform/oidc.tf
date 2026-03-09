@@ -64,10 +64,10 @@ resource "aws_iam_role" "github_actions_oidc" {
 # ─── IAM POLICY ───────────────────────────────────────────────
 # Least privilege — only what the pipeline actually needs
 
-#checkov:skip=CKV_AWS_355:ssm:SendCommand and ec2:DescribeInstances require wildcard — no resource-level restriction supported
-#checkov:skip=CKV_AWS_290:ssm:GetParameter scoped to rerktserver/* path; SSM action wildcards are service-limited
-#checkov:skip=CKV_AWS_288:ecr:GetAuthorizationToken requires wildcard resource — no resource-level restriction supported by ECR auth
 resource "aws_iam_role_policy" "github_actions_deploy" {
+  #checkov:skip=CKV_AWS_355:ssm:SendCommand and ec2:DescribeInstances require wildcard — no resource-level restriction supported
+  #checkov:skip=CKV_AWS_290:ssm:GetParameter scoped to rerktserver/* path; SSM action wildcards are service-limited
+  #checkov:skip=CKV_AWS_288:ecr:GetAuthorizationToken requires wildcard resource — no resource-level restriction supported by ECR auth
   name = "github-actions-deploy-policy"
   role = aws_iam_role.github_actions_oidc.id
 

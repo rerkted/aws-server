@@ -1,10 +1,10 @@
 # ─── ecr.tf ───────────────────────────────────────────────────
 # ECR repository for Docker golden images
 
-#checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
-#checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
-#checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
 resource "aws_ecr_repository" "portfolio" {
+  #checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
+  #checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
+  #checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
   name                 = "portfolio"
   image_tag_mutability = "MUTABLE"
 
@@ -38,10 +38,10 @@ resource "aws_ecr_lifecycle_policy" "portfolio" {
 }
 
 # ─── ECR repo for Rerkt.AI proxy ──────────────────────────────
-#checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
-#checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
-#checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
 resource "aws_ecr_repository" "rerkt_ai" {
+  #checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
+  #checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
+  #checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
   name                 = "rerkt-ai"
   image_tag_mutability = "MUTABLE"
 
@@ -74,10 +74,10 @@ resource "aws_ecr_lifecycle_policy" "rerkt_ai" {
 }
 
 # ─── ECR repo for Bedrock AI proxy ────────────────────────────
-#checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
-#checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
-#checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
 resource "aws_ecr_repository" "bedrock_ai" {
+  #checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
+  #checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
+  #checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient; CMK adds cost with no security benefit here
   name                 = "bedrock-ai"
   image_tag_mutability = "MUTABLE"
 
