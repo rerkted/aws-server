@@ -183,7 +183,7 @@ Log observability is handled by the companion [aws-grafana](https://github.com/r
 
 - **Grafana** dashboard at [grafana.rerktserver.com](https://grafana.rerktserver.com)
 - **Promtail** runs as a systemd service on this EC2, shipping logs to Loki
-- Logs collected: Docker container stdout, `/var/log/secure` (auth/CSPM), `/var/log/messages`
+- Logs collected: Docker container stdout, journald auth logs via `sshd.service` (SSH/CSPM), journald system logs
 
 ---
 
