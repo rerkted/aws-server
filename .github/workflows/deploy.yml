@@ -203,9 +203,6 @@ jobs:
 
               \"# ── Ensure Prometheus exporters are running\",
               \"docker inspect node-exporter &>/dev/null || docker run -d --name node-exporter --restart always --pid host --network host -v /:/host:ro,rslave prom/node-exporter:v1.8.2 --path.rootfs=/host\"
-              # cAdvisor disabled on t3.nano (OOM risk) — to re-enable on t3.micro:
-              # uncomment below and add port 8080 ingress rule back to security.tf
-              # \"docker inspect cadvisor &>/dev/null || docker run -d --name cadvisor --restart always --privileged -p 8080:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro -v /dev/disk/:/dev/disk:ro gcr.io/cadvisor/cadvisor:v0.49.1\"
             ]" \
             --query "Command.CommandId" \
             --output text)
