@@ -52,6 +52,12 @@ variable "github_repo" {
   default     = "aws-server"
 }
 
+variable "grafana_active" {
+  description = "Set to false when grafana stack is destroyed — disables SSM lookup of grafana EIP"
+  type        = bool
+  default     = true
+}
+
 variable "anthropic_api_key" {
   description = "Anthropic API key — stored in AWS Secrets Manager, never in GitHub secrets"
   type        = string

@@ -91,11 +91,12 @@ chmod 644 /etc/cron.d/ecr-login
 
 # ── 9. Install Promtail for log shipping to Grafana Loki ─────
 # Read Grafana EIP from SSM Parameter Store (set by aws-grafana terraform)
+# Falls back to placeholder if grafana stack is not yet deployed — sync-loki-url.timer will update it
 GRAFANA_EIP=$(aws ssm get-parameter \
   --region "${aws_region}" \
   --name "/rerktserver/grafana/eip" \
   --query "Parameter.Value" \
-  --output text)
+  --output text 2>/dev/null || echo "127.0.0.1")
 LOKI_URL="http://$${GRAFANA_EIP}:3100/loki/api/v1/push"
 
 PROMTAIL_VERSION="2.9.0"
