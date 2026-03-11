@@ -42,6 +42,15 @@ resource "aws_security_group" "portfolio" {
     description = "Node Exporter metrics (Grafana server only)"
   }
 
+  # cAdvisor — disabled on t3.nano (OOM risk). Uncomment if upgraded to t3.micro or larger.
+  # ingress {
+  #   from_port   = 8080
+  #   to_port     = 8080
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["${data.aws_ssm_parameter.grafana_eip.value}/32"]
+  #   description = "cAdvisor container metrics (Grafana server only)"
+  # }
+
   egress {
     from_port   = 0
     to_port     = 0

@@ -227,6 +227,20 @@ docker run -d \
 
 echo "Node Exporter started"
 
+# ── cAdvisor — per-container metrics (disabled on t3.nano — OOM risk)
+# Uncomment if upgraded to t3.micro or larger (requires port 8080 in security.tf)
+# docker run -d \
+#   --name cadvisor \
+#   --restart always \
+#   --privileged \
+#   -p 8080:8080 \
+#   -v /:/rootfs:ro \
+#   -v /var/run:/var/run:ro \
+#   -v /sys:/sys:ro \
+#   -v /var/lib/docker/:/var/lib/docker:ro \
+#   -v /dev/disk/:/dev/disk:ro \
+#   gcr.io/cadvisor/cadvisor:v0.49.1
+
 # ── 11. SSM agent watchdog (auto-restart if connection lost) ─
 cat > /usr/local/bin/ssm-watchdog.sh << 'WATCHDOG'
 #!/bin/bash
