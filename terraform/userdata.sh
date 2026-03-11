@@ -225,20 +225,42 @@ docker run -d \
   prom/node-exporter:v1.8.2 \
   --path.rootfs=/host
 
-# cAdvisor — per-container metrics
-# Port 8080 restricted by SG to Grafana server only
-docker run -d \
-  --name cadvisor \
-  --restart always \
-  --privileged \
-  -p 8080:8080 \
-  -v /:/rootfs:ro \
-  -v /var/run:/var/run:ro \
-  -v /sys:/sys:ro \
-  -v /var/lib/docker/:/var/lib/docker:ro \
-  -v /dev/disk/:/dev/disk:ro \
-  gcr.io/cadvisor/cadvisor:v0.49.1
+echo "Node Exporter started"
 
-echo "Node Exporter and cAdvisor started"
+# ── 11. SSM agent watchdog (auto-restart if connection lost) ─
+cat > /usr/local/bin/ssm-watchdog.sh << 'WATCHDOG'
+#!/bin/bash
+if ! systemctl is-active --quiet amazon-ssm-agent; then
+  logger -t ssm-watchdog "SSM agent not active — restarting"
+  systemctl restart amazon-ssm-agent
+fi
+WATCHDOG
+chmod +x /usr/local/bin/ssm-watchdog.sh
+
+cat > /etc/systemd/system/ssm-watchdog.service << 'SVC'
+[Unit]
+Description=SSM agent watchdog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ssm-watchdog.sh
+SVC
+
+cat > /etc/systemd/system/ssm-watchdog.timer << 'TMR'
+[Unit]
+Description=Check SSM agent every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+TMR
+
+systemctl daemon-reload
+systemctl enable --now ssm-watchdog.timer
+
+echo "SSM agent watchdog installed"
 
 echo "=== Bootstrap complete at $(date) ==="
