@@ -135,27 +135,62 @@ scrape_configs:
     pipeline_stages:
       - docker: {}
 
-  # Auth logs — SSH logins, sudo usage (CSPM)
+  # Auth logs — SSH logins, sudo usage (CSPM) — Amazon Linux 2023 uses journald
   - job_name: auth
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: auth
-          host: rerktserver.com
-          __path__: /var/log/secure
+    journal:
+      matches: _SYSTEMD_UNIT=sshd.service
+      labels:
+        job: auth
+        host: ${domain_name}
 
-  # System logs (CSPM)
+  # System logs (CSPM) — Amazon Linux 2023 uses journald
   - job_name: system
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: system
-          host: rerktserver.com
-          __path__: /var/log/messages
+    journal:
+      labels:
+        job: system
+        host: ${domain_name}
 PROMTAIL_CONF
 
 mkdir -p /var/lib/promtail
 usermod -aG docker root
+
+# ── Cron: auto-update promtail Loki URL if grafana EIP changes in SSM ────────
+cat > /usr/local/bin/sync-loki-url.sh << 'SYNC'
+#!/bin/bash
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+CURRENT=$(grep -oP 'http://\K[^:]+(?=:3100)' /etc/promtail-config.yml)
+LATEST=$(aws ssm get-parameter --region "$REGION" --name "/rerktserver/grafana/eip" --query "Parameter.Value" --output text 2>/dev/null)
+if [ -n "$LATEST" ] && [ "$CURRENT" != "$LATEST" ]; then
+  sed -i "s|http://$CURRENT:3100|http://$LATEST:3100|g" /etc/promtail-config.yml
+  systemctl restart promtail
+  logger -t sync-loki-url "Updated Loki URL from $CURRENT to $LATEST"
+fi
+SYNC
+chmod +x /usr/local/bin/sync-loki-url.sh
+
+cat > /etc/systemd/system/sync-loki-url.service << 'SVC'
+[Unit]
+Description=Sync Loki URL from SSM
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sync-loki-url.sh
+SVC
+
+cat > /etc/systemd/system/sync-loki-url.timer << 'TMR'
+[Unit]
+Description=Sync Loki URL every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+TMR
+
+systemctl daemon-reload
+systemctl enable --now sync-loki-url.timer
 
 cat > /etc/systemd/system/promtail.service << 'SYSTEMD'
 [Unit]
