@@ -89,15 +89,20 @@ docker logs bedrock-ai --tail=50
 
 ## Check Promtail (Log Shipping)
 
+Promtail is managed automatically by the `sync-loki-url.timer` (runs every 5 min):
+- **Grafana up** → promtail starts automatically and ships logs to Loki
+- **Grafana destroyed** → promtail stops automatically (SSM param deleted)
+
 ```bash
+# Check status
 sudo systemctl status promtail
 sudo journalctl -u promtail -n 30 --no-pager
+
+# Check sync timer logs
+sudo journalctl -t sync-loki-url -n 20 --no-pager
 ```
 
-If Promtail is down:
-```bash
-sudo systemctl restart promtail
-```
+> Do not manually restart promtail when grafana is down — the sync timer will start it automatically once grafana is back up.
 
 ---
 
@@ -193,3 +198,23 @@ Deploy aws-server before aws-grafana — aws-grafana reads the portfolio EIP fro
 1. `terraform apply` in aws-server
 2. `terraform apply` in aws-grafana
 3. Push aws-grafana to deploy the stack
+
+---
+
+## Re-enabling Grafana Monitoring
+
+When spinning grafana back up after a destroy, uncomment the following in aws-server:
+
+**`terraform/userdata.sh`** — re-enable cAdvisor (if on t3.micro or larger):
+```
+# Uncomment the cAdvisor docker run block
+```
+
+**`terraform/security.tf`** — re-enable cAdvisor port 8080 ingress rule:
+```
+# Uncomment the port 8080 ingress block
+```
+
+**`.github/workflows/deploy.yml`** — uncomment node-exporter ensure-running line if needed.
+
+Once grafana terraform is applied and deployed, the `sync-loki-url.timer` on aws-server will detect the new grafana EIP in SSM and **automatically start promtail** within 5 minutes — no manual action needed.

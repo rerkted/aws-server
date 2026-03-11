@@ -179,11 +179,14 @@ The deploy workflow reads the instance ID from SSM at runtime — no manual secr
 
 ## Monitoring
 
-Log observability is handled by the companion [aws-grafana](https://github.com/rerkted/aws-grafana) stack:
+Log and metrics observability is handled by the optional companion [aws-grafana](https://github.com/rerkted/aws-grafana) stack:
 
 - **Grafana** dashboard at [grafana.rerktserver.com](https://grafana.rerktserver.com)
-- **Promtail** runs as a systemd service on this EC2, shipping logs to Loki
+- **Promtail** runs as a systemd service, shipping logs to Loki — auto-starts when grafana is up, auto-stops when grafana is destroyed (managed by `sync-loki-url.timer`)
+- **node-exporter** runs continuously on port 9100, exposing host metrics for Prometheus to scrape when grafana is active
 - Logs collected: Docker container stdout, journald auth logs via `sshd.service` (SSH/CSPM), journald system logs
+
+> Grafana is optional — the portfolio site runs independently. See [RUNBOOK.md](RUNBOOK.md) for instructions on spinning grafana up/down.
 
 ---
 

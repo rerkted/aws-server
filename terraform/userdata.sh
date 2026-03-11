@@ -158,12 +158,26 @@ usermod -aG docker root
 cat > /usr/local/bin/sync-loki-url.sh << 'SYNC'
 #!/bin/bash
 REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-CURRENT=$(grep -oP 'http://\K[^:]+(?=:3100)' /etc/promtail-config.yml)
 LATEST=$(aws ssm get-parameter --region "$REGION" --name "/rerktserver/grafana/eip" --query "Parameter.Value" --output text 2>/dev/null)
-if [ -n "$LATEST" ] && [ "$CURRENT" != "$LATEST" ]; then
+
+# Grafana destroyed — stop promtail if running
+if [ -z "$LATEST" ]; then
+  if systemctl is-active --quiet promtail; then
+    systemctl stop promtail
+    logger -t sync-loki-url "Grafana EIP not found in SSM — stopping promtail"
+  fi
+  exit 0
+fi
+
+# Grafana available — ensure promtail is running with correct URL
+CURRENT=$(grep -oP 'http://\K[^:]+(?=:3100)' /etc/promtail-config.yml)
+if [ "$CURRENT" != "$LATEST" ]; then
   sed -i "s|http://$CURRENT:3100|http://$LATEST:3100|g" /etc/promtail-config.yml
-  systemctl restart promtail
   logger -t sync-loki-url "Updated Loki URL from $CURRENT to $LATEST"
+fi
+if ! systemctl is-active --quiet promtail; then
+  systemctl start promtail
+  logger -t sync-loki-url "Grafana EIP found — started promtail"
 fi
 SYNC
 chmod +x /usr/local/bin/sync-loki-url.sh
