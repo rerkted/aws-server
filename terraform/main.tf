@@ -42,3 +42,8 @@ data "aws_ami" "amazon_linux" {
 }
 
 data "aws_availability_zones" "available" {}
+
+# Grafana EIP — used to restrict Prometheus scrape ports to Grafana server only
+data "aws_ssm_parameter" "grafana_eip" {
+  name = "/rerktserver/grafana/eip"
+}

@@ -178,4 +178,32 @@ systemctl start promtail
 
 echo "Promtail installed and shipping logs to Loki"
 
+# ── 10. Start infrastructure monitoring exporters ────────────
+# Node Exporter — host metrics (CPU, memory, disk, network)
+# --network host binds to port 9100; SG restricts to Grafana server only
+docker run -d \
+  --name node-exporter \
+  --restart always \
+  --pid host \
+  --network host \
+  -v /:/host:ro,rslave \
+  prom/node-exporter:v1.8.2 \
+  --path.rootfs=/host
+
+# cAdvisor — per-container metrics
+# Port 8080 restricted by SG to Grafana server only
+docker run -d \
+  --name cadvisor \
+  --restart always \
+  --privileged \
+  -p 8080:8080 \
+  -v /:/rootfs:ro \
+  -v /var/run:/var/run:ro \
+  -v /sys:/sys:ro \
+  -v /var/lib/docker/:/var/lib/docker:ro \
+  -v /dev/disk/:/dev/disk:ro \
+  gcr.io/cadvisor/cadvisor:v0.49.1
+
+echo "Node Exporter and cAdvisor started"
+
 echo "=== Bootstrap complete at $(date) ==="
