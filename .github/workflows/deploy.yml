@@ -198,10 +198,6 @@ jobs:
               \"docker stop bedrock-ai || true\",
               \"docker rm bedrock-ai || true\",
               \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 $BEDROCK_IMAGE\"
-              # Promtail: managed automatically by sync-loki-url.timer (starts/stops based on grafana SSM param)
-              # , \"systemctl is-active promtail || systemctl start promtail\"
-              # Node Exporter: kept running via --restart always from bootstrap (scraping disabled when grafana is down)
-              # , \"docker inspect node-exporter &>/dev/null || docker run -d --name node-exporter --restart always --pid host --network host -v /:/host:ro,rslave prom/node-exporter:v1.8.2 --path.rootfs=/host\"
             ]" \
             --query "Command.CommandId" \
             --output text)
