@@ -1,7 +1,7 @@
 {
-  "name": "rerkt-ai-proxy",
+  "name": "chat-ai-proxy",
   "version": "1.0.0",
-  "description": "Secure proxy for Rerkt.AI — routes requests to Anthropic API",
+  "description": "Secure proxy for AI chat — routes requests to Anthropic API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

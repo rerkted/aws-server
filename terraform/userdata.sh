@@ -56,7 +56,9 @@ certbot certonly \
   --agree-tos \
   --email "$EMAIL" \
   -d "$DOMAIN" \
-  -d "www.$DOMAIN"
+  -d "www.$DOMAIN" \
+  -d "ai.$DOMAIN" \
+  -d "bedrock.$DOMAIN"
 
 echo "SSL cert issued successfully at $(date)"
 
@@ -94,7 +96,7 @@ chmod 644 /etc/cron.d/ecr-login
 # Falls back to placeholder if grafana stack is not yet deployed — sync-loki-url.timer will update it
 GRAFANA_EIP=$(aws ssm get-parameter \
   --region "${aws_region}" \
-  --name "/rerktserver/grafana/eip" \
+  --name "/${ssm_namespace}/grafana/eip" \
   --query "Parameter.Value" \
   --output text 2>/dev/null || echo "127.0.0.1")
 LOKI_URL="http://$${GRAFANA_EIP}:3100/loki/api/v1/push"
@@ -159,7 +161,7 @@ usermod -aG docker root
 cat > /usr/local/bin/sync-loki-url.sh << 'SYNC'
 #!/bin/bash
 REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-LATEST=$(aws ssm get-parameter --region "$REGION" --name "/rerktserver/grafana/eip" --query "Parameter.Value" --output text 2>/dev/null)
+LATEST=$(aws ssm get-parameter --region "$REGION" --name "/${ssm_namespace}/grafana/eip" --query "Parameter.Value" --output text 2>/dev/null)
 
 # Grafana destroyed — stop promtail if running
 if [ -z "$LATEST" ]; then

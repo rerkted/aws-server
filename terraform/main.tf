@@ -47,5 +47,5 @@ data "aws_availability_zones" "available" {}
 # Only read when grafana stack is active (set grafana_active=false in tfvars when destroyed)
 data "aws_ssm_parameter" "grafana_eip" {
   count = var.grafana_active ? 1 : 0
-  name  = "/rerktserver/grafana/eip"
+  name  = "/${var.ssm_namespace}/grafana/eip"
 }

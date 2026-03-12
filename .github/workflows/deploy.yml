@@ -12,8 +12,10 @@ on:
 env:
   AWS_REGION: us-east-1
   IMAGE_NAME: portfolio
-  AI_IMAGE_NAME: rerkt-ai
+  AI_IMAGE_NAME: ${{ vars.AI_IMAGE_NAME || 'chat-ai' }}
   BEDROCK_IMAGE_NAME: bedrock-ai
+  SSM_NAMESPACE: ${{ vars.SSM_NAMESPACE || 'rerktserver' }}
+  DOMAIN_NAME: ${{ vars.DOMAIN_NAME || 'rerktserver.com' }}
 
 jobs:
   # ── STAGE 1: Security Scans ───────────────────────────────────
@@ -94,6 +96,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: DOMAIN_NAME=${{ env.DOMAIN_NAME }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -171,7 +174,7 @@ jobs:
           AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
           BEDROCK_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest"
           INSTANCE_ID=$(aws ssm get-parameter \
-            --name "/rerktserver/portfolio/instance-id" \
+            --name "/${{ env.SSM_NAMESPACE }}/portfolio/instance-id" \
             --query "Parameter.Value" \
             --output text)
           REGISTRY="${{ needs.build.outputs.ecr-registry }}"
@@ -191,13 +194,13 @@ jobs:
               \"docker pull $AI_IMAGE\",
               \"docker stop rerkt-ai || true\",
               \"docker rm rerkt-ai || true\",
-              \"ANTHROPIC_KEY=\$(aws ssm get-parameter --name /rerktserver/anthropic-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
-              \"docker run -d --name rerkt-ai --restart always -p 172.17.0.1:3001:3001 -e ANTHROPIC_API_KEY=\$ANTHROPIC_KEY $AI_IMAGE\",
+              \"ANTHROPIC_KEY=\$(aws ssm get-parameter --name /${{ env.SSM_NAMESPACE }}/anthropic-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
+              \"docker run -d --name rerkt-ai --restart always -p 172.17.0.1:3001:3001 -e ANTHROPIC_API_KEY=\$ANTHROPIC_KEY -e DOMAIN_NAME=${{ env.DOMAIN_NAME }} $AI_IMAGE\",
 
               \"docker pull $BEDROCK_IMAGE\",
               \"docker stop bedrock-ai || true\",
               \"docker rm bedrock-ai || true\",
-              \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 $BEDROCK_IMAGE\"
+              \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 -e DOMAIN_NAME=${{ env.DOMAIN_NAME }} $BEDROCK_IMAGE\"
             ]" \
             --query "Command.CommandId" \
             --output text)
@@ -255,7 +258,7 @@ jobs:
         run: |
           sleep 10
           PORTFOLIO_IP=$(aws ssm get-parameter \
-            --name "/rerktserver/portfolio/eip" \
+            --name "/${{ env.SSM_NAMESPACE }}/portfolio/eip" \
             --query "Parameter.Value" --output text)
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://$PORTFOLIO_IP/health)
           if [ "$STATUS" != "200" ]; then
@@ -266,7 +269,7 @@ jobs:
 
       - name: Health check — Rerkt.AI
         run: |
-          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://ai.rerktserver.com/health)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://ai.${{ env.DOMAIN_NAME }}/health)
           if [ "$STATUS" != "200" ]; then
             echo "Rerkt.AI health check failed — HTTP $STATUS"
             exit 1
@@ -275,7 +278,7 @@ jobs:
 
       - name: Health check — Bedrock AI
         run: |
-          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://bedrock.rerktserver.com/health)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://bedrock.${{ env.DOMAIN_NAME }}/health)
           if [ "$STATUS" != "200" ]; then
             echo "Bedrock AI health check failed — HTTP $STATUS"
             exit 1
@@ -288,7 +291,7 @@ jobs:
     needs: verify
     uses: rerkted/devsecops-pipeline/.github/workflows/dast.yml@main
     with:
-      target-url: https://rerktserver.com
+      target-url: https://${{ vars.DOMAIN_NAME || 'rerktserver.com' }}
       severity-threshold: HIGH
     permissions:
       contents: read
@@ -300,7 +303,7 @@ jobs:
     needs: dast
     uses: rerkted/devsecops-pipeline/.github/workflows/cleanup.yml@main
     with:
-      ssm-instance-param: /rerktserver/portfolio/instance-id
+      ssm-instance-param: /${{ vars.SSM_NAMESPACE || 'rerktserver' }}/portfolio/instance-id
       aws-region: us-east-1
     secrets:
       role-arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -321,7 +324,7 @@ jobs:
       verify-result: ${{ needs.verify.result }}
       dast-result: ${{ needs.dast.result }}
       cleanup-result: ${{ needs.cleanup.result }}
-      service-name: Portfolio — rerktserver.com
-      service-url: https://rerktserver.com
+      service-name: Portfolio — ${{ vars.DOMAIN_NAME || 'rerktserver.com' }}
+      service-url: https://${{ vars.DOMAIN_NAME || 'rerktserver.com' }}
     permissions:
       contents: read

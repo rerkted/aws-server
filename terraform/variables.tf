@@ -30,9 +30,8 @@ variable "your_ip_cidr" {
 }
 
 variable "domain_name" {
-  description = "Your domain name"
+  description = "Your domain name (must already exist as a Route53 hosted zone)"
   type        = string
-  default     = "rerktserver.com"
 }
 
 variable "admin_email" {
@@ -43,11 +42,10 @@ variable "admin_email" {
 variable "github_org" {
   description = "GitHub username or organization that owns the repo"
   type        = string
-  default     = "rerkted"
 }
 
 variable "github_repo" {
-  description = "GitHub repository name"
+  description = "GitHub repository name (this repo)"
   type        = string
   default     = "aws-server"
 }
@@ -62,4 +60,22 @@ variable "anthropic_api_key" {
   description = "Anthropic API key — stored in AWS Secrets Manager, never in GitHub secrets"
   type        = string
   sensitive   = true
+}
+
+variable "ssm_namespace" {
+  description = "SSM Parameter Store namespace prefix — all parameters stored under /<namespace>/..."
+  type        = string
+  default     = "rerktserver"
+}
+
+variable "grafana_repo" {
+  description = "GitHub repo name for the Grafana stack — grants OIDC deploy access to that repo"
+  type        = string
+  default     = "aws-grafana"
+}
+
+variable "ai_image_name" {
+  description = "ECR repository name for the AI chat proxy container (ai.yourdomain.com)"
+  type        = string
+  default     = "chat-ai"
 }

@@ -5,8 +5,8 @@
 
 resource "aws_ssm_parameter" "anthropic_api_key" {
   #checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient for API key storage; CMK adds cost with no security benefit here
-  name        = "/rerktserver/anthropic-api-key"
-  description = "Anthropic API key for rerkt-ai container"
+  name        = "/${var.ssm_namespace}/anthropic-api-key"
+  description = "Anthropic API key for the AI chat container"
   type        = "SecureString"
   value       = var.anthropic_api_key
 

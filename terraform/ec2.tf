@@ -26,15 +26,16 @@ resource "aws_instance" "portfolio" {
 
   # Bootstrap script — installs Docker, pulls image, issues SSL cert
   user_data = base64encode(templatefile("${path.module}/userdata.sh", {
-    ecr_registry = aws_ecr_repository.portfolio.repository_url
-    aws_region   = var.aws_region
-    domain_name  = var.domain_name
-    admin_email  = var.admin_email
+    ecr_registry  = aws_ecr_repository.portfolio.repository_url
+    aws_region    = var.aws_region
+    domain_name   = var.domain_name
+    admin_email   = var.admin_email
+    ssm_namespace = var.ssm_namespace
   }))
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [ami]
+    ignore_changes        = [ami, user_data]  # user_data only runs on first boot — changes don't affect running instance
   }
 
   tags = { Name = "portfolio-ec2" }
@@ -51,7 +52,7 @@ resource "aws_eip" "portfolio" {
 # Store portfolio EIP and instance ID in SSM — deploy workflow reads these dynamically
 resource "aws_ssm_parameter" "portfolio_eip" {
   #checkov:skip=CKV2_AWS_34:EIP is a public IP address — not sensitive data requiring SecureString
-  name  = "/rerktserver/portfolio/eip"
+  name  = "/${var.ssm_namespace}/portfolio/eip"
   type  = "String"
   value = aws_eip.portfolio.public_ip
 
@@ -60,7 +61,7 @@ resource "aws_ssm_parameter" "portfolio_eip" {
 
 resource "aws_ssm_parameter" "portfolio_instance_id" {
   #checkov:skip=CKV2_AWS_34:EC2 instance ID is not sensitive — used for SSM targeting
-  name  = "/rerktserver/portfolio/instance-id"
+  name  = "/${var.ssm_namespace}/portfolio/instance-id"
   type  = "String"
   value = aws_instance.portfolio.id
 

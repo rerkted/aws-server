@@ -1,5 +1,8 @@
 FROM nginx:1.27-alpine
 
+# Domain name — injected at build time via: --build-arg DOMAIN_NAME=yourdomain.com
+ARG DOMAIN_NAME=yourdomain.com
+
 # Patch all OS packages
 RUN apk upgrade --no-cache
 
@@ -20,6 +23,9 @@ COPY ./bedrock/index.html /usr/share/nginx/bedrock/
 # Copy nginx configs
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf
+
+# Replace DOMAIN_NAME placeholder with the build arg value
+RUN sed -i "s/DOMAIN_NAME/${DOMAIN_NAME}/g" /etc/nginx/nginx-ssl.conf
 
 # Create certbot webroot directory
 RUN mkdir -p /var/www/certbot

@@ -50,7 +50,7 @@ resource "aws_iam_role" "github_actions_oidc" {
             "token.actions.githubusercontent.com:sub" = [
               "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main",
               "repo:${var.github_org}/${var.github_repo}:environment:production",
-              "repo:${var.github_org}/aws-grafana:ref:refs/heads/main"
+              "repo:${var.github_org}/${var.grafana_repo}:ref:refs/heads/main"
             ]
           }
         }
@@ -66,7 +66,7 @@ resource "aws_iam_role" "github_actions_oidc" {
 
 resource "aws_iam_role_policy" "github_actions_deploy" {
   #checkov:skip=CKV_AWS_355:ssm:SendCommand and ec2:DescribeInstances require wildcard — no resource-level restriction supported
-  #checkov:skip=CKV_AWS_290:ssm:GetParameter scoped to rerktserver/* path; SSM action wildcards are service-limited
+  #checkov:skip=CKV_AWS_290:ssm:GetParameter scoped to namespace/* path; SSM action wildcards are service-limited
   #checkov:skip=CKV_AWS_288:ecr:GetAuthorizationToken requires wildcard resource — no resource-level restriction supported by ECR auth
   name = "github-actions-deploy-policy"
   role = aws_iam_role.github_actions_oidc.id

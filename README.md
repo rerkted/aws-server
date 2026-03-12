@@ -1,8 +1,10 @@
-# Portfolio Infrastructure — rerktserver.com
+# Portfolio Infrastructure — aws-server
 
-A cost-effective, secure, and fully automated portfolio website built with DevSecOps best practices end-to-end.
+A cost-effective, secure, and fully automated portfolio website built with DevSecOps best practices end-to-end. Fork this repo, fill in your details, and have a live site in under an hour.
 
-[![Build & Deploy](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml/badge.svg)](https://github.com/rerkted/aws-server/actions/workflows/deploy.yml)
+[![Build & Deploy](https://github.com/YOUR_GITHUB_ORG/aws-server/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR_GITHUB_ORG/aws-server/actions/workflows/deploy.yml)
+
+> **New here?** Start with [RUNBOOK.md](RUNBOOK.md) — a complete step-by-step guide from zero to deployed.
 
 ---
 
@@ -21,9 +23,9 @@ GitHub Actions (OIDC — no static AWS keys)
       └── SSM deploy → EC2 pull & run
                               │
                               ▼
-                     portfolio   → nginx reverse proxy (rerktserver.com)
-                     rerkt-ai    → Claude API proxy (ai.rerktserver.com)
-                     bedrock-ai  → AWS Bedrock proxy (bedrock.rerktserver.com)
+                     portfolio   → nginx reverse proxy (yourdomain.com)
+                     rerkt-ai    → Claude API proxy (ai.yourdomain.com)
+                     bedrock-ai  → AWS Bedrock proxy (bedrock.yourdomain.com)
                      HTTPS via Let's Encrypt
 ```
 
@@ -46,35 +48,55 @@ GitHub Actions (OIDC — no static AWS keys)
 
 ### Prerequisites
 
-- AWS CLI configured (`aws configure`)
+- AWS account with CLI configured (`aws configure`)
 - Terraform installed (`>= 1.5`)
-- Docker installed
-- An existing EC2 key pair in AWS
 - Domain registered in Route53
 
-### 1. Deploy aws-server first (required — stores EIP in SSM for Grafana)
+> **Complete beginner?** See [RUNBOOK.md](RUNBOOK.md) for step-by-step instructions including tool installation, AWS account setup, and domain configuration.
+
+### 1. Fork this repo, then clone it
+
+```bash
+git clone https://github.com/YOUR_USERNAME/aws-server.git
+cd aws-server
+```
+
+### 2. Customize your portfolio
+
+Edit [website/index.html](website/index.html) — replace all `YOUR_*` placeholders with your real information.
+
+### 3. Deploy infrastructure
 
 ```bash
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
-vi terraform.tfvars   # fill in your values
+# Fill in your values (domain, key pair, IP, GitHub org, etc.)
+nano terraform.tfvars
+
+export TF_VAR_anthropic_api_key="sk-ant-..."  # or "placeholder" if not using AI features
 
 terraform init
 terraform apply
 ```
 
-### 2. Add GitHub Secrets
+### 4. Add GitHub Secret + Variables
 
 Go to your repo → **Settings → Secrets and variables → Actions**:
 
-| Secret | Description |
-|--------|-------------|
-| `AWS_OIDC_ROLE_ARN` | From `terraform output oidc_role_arn` |
-| `ANTHROPIC_API_KEY` | Anthropic API key for rerkt-ai container |
+**Secrets tab:**
 
-No static AWS keys, no instance IDs, no IPs — all handled via OIDC and SSM Parameter Store.
+| Secret | Value |
+|--------|-------|
+| `AWS_OIDC_ROLE_ARN` | Output of `terraform output oidc_role_arn` |
 
-### 3. Push to Deploy
+**Variables tab:**
+
+| Variable | Value |
+|----------|-------|
+| `SSM_NAMESPACE` | Must match `ssm_namespace` in your tfvars (e.g. `myproject`) |
+| `DOMAIN_NAME` | Your root domain (e.g. `yourdomain.com`) |
+
+### 5. Push to Deploy
 
 ```bash
 git push origin main
@@ -88,9 +110,9 @@ git push origin main
 ```
 aws-server/
 ├── website/
-│   └── index.html              # Portfolio site
-├── chat/                       # Rerkt.AI proxy (Claude API)
-├── bedrock/                    # Bedrock AI proxy (AWS Bedrock)
+│   └── index.html              # Portfolio site (edit YOUR_* placeholders)
+├── chat/                       # Claude API proxy (ai.yourdomain.com)
+├── bedrock/                    # AWS Bedrock proxy (bedrock.yourdomain.com)
 ├── terraform/
 │   ├── main.tf                 # Provider, backend
 │   ├── vpc.tf                  # VPC, subnet, routing
@@ -109,7 +131,7 @@ aws-server/
 ├── Dockerfile                  # nginx:1.27-alpine golden image
 ├── nginx.conf                  # HTTP-only config (ACME challenge)
 ├── nginx-ssl.conf              # Full HTTPS config
-└── RUNBOOK.md                  # Operational procedures
+└── RUNBOOK.md                  # Complete setup guide + operations
 ```
 
 ---
@@ -123,7 +145,8 @@ userdata.sh runs on first boot:
   1. Docker installed, ECR image pulled
   2. nginx starts on HTTP port 80 (ACME challenge)
   3. Certbot requests cert via webroot challenge
-  4. Cert issued → /etc/letsencrypt/live/rerktserver.com/
+     Covers: yourdomain.com, www., ai., bedrock.
+  4. Cert issued → /etc/letsencrypt/live/yourdomain.com/
   5. Container restarts with HTTPS using nginx-ssl.conf
 
 Auto-renewal (cron, twice daily — 3am & 3pm UTC):
@@ -139,6 +162,7 @@ Auto-renewal (cron, twice daily — 3am & 3pm UTC):
 - SSH restricted to your IP only (`your_ip_cidr` in tfvars)
 - SSM-based deployment — no SSH in CI/CD pipeline
 - Encrypted EBS volume (gp3)
+- IMDSv2 required (`http_tokens = "required"`)
 
 ### CI/CD Pipeline
 - GitHub Actions OIDC federation — no static AWS access keys
@@ -170,8 +194,11 @@ Terraform writes these parameters automatically on every `apply`:
 
 | Parameter | Value | Used by |
 |-----------|-------|---------|
-| `/rerktserver/portfolio/eip` | Portfolio Elastic IP | aws-grafana security group |
-| `/rerktserver/portfolio/instance-id` | EC2 instance ID | GitHub Actions deploy workflow |
+| `/<namespace>/portfolio/eip` | Portfolio Elastic IP | aws-grafana security group, deploy workflow |
+| `/<namespace>/portfolio/instance-id` | EC2 instance ID | GitHub Actions deploy workflow |
+| `/<namespace>/anthropic-api-key` | Anthropic API key (encrypted) | rerkt-ai container |
+
+`<namespace>` = value of `ssm_namespace` in your tfvars (default: `rerktserver`).
 
 The deploy workflow reads the instance ID from SSM at runtime — no manual secret updates needed when infrastructure is rebuilt.
 
@@ -179,17 +206,10 @@ The deploy workflow reads the instance ID from SSM at runtime — no manual secr
 
 ## Monitoring
 
-Log and metrics observability is handled by the optional companion [aws-grafana](https://github.com/rerkted/aws-grafana) stack:
+Log and metrics observability is handled by the optional companion [aws-grafana](https://github.com/YOUR_GITHUB_ORG/aws-grafana) stack:
 
-- **Grafana** dashboard at [grafana.rerktserver.com](https://grafana.rerktserver.com)
-- **Promtail** runs as a systemd service, shipping logs to Loki — auto-starts when grafana is up, auto-stops when grafana is destroyed (managed by `sync-loki-url.timer`)
+- **Grafana** dashboard (grafana.yourdomain.com)
+- **Promtail** ships logs from this EC2 to Loki — auto-starts when grafana is up, auto-stops when grafana is destroyed
 - **node-exporter** runs continuously on port 9100, exposing host metrics for Prometheus to scrape when grafana is active
-- Logs collected: Docker container stdout, journald auth logs via `sshd.service` (SSH/CSPM), journald system logs
 
-> Grafana is optional — the portfolio site runs independently. See [RUNBOOK.md](RUNBOOK.md) for instructions on spinning grafana up/down.
-
----
-
-## Live Site
-
-**[https://rerktserver.com](https://rerktserver.com)**
+> Grafana is optional — the portfolio site runs independently. See [RUNBOOK.md](RUNBOOK.md) for setup instructions.

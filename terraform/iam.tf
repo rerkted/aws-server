@@ -43,7 +43,7 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream"
         ]
-        Resource = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
       },
       {
         Sid    = "MarketplaceSubscribe"
@@ -62,7 +62,7 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
 # SSM Parameter Store — read Grafana EIP at boot for Promtail config
 resource "aws_iam_role_policy" "ssm_parameters" {
   #checkov:skip=CKV_AWS_290:kms:Decrypt requires wildcard resource — KMS key ARNs are dynamic and not known at Terraform time
-  #checkov:skip=CKV_AWS_288:kms:Decrypt is scoped to rerktserver SSM parameters only; wildcard is on the KMS action not SSM
+  #checkov:skip=CKV_AWS_288:kms:Decrypt is scoped to the SSM namespace only; wildcard is on the KMS action not SSM
   #checkov:skip=CKV_AWS_355:kms:Decrypt requires wildcard resource — KMS key ARNs are dynamic
   name = "ssm-parameter-read"
   role = aws_iam_role.ec2_portfolio.name
@@ -73,7 +73,7 @@ resource "aws_iam_role_policy" "ssm_parameters" {
       {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
-        Resource = "arn:aws:ssm:us-east-1:*:parameter/rerktserver/*"
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/${var.ssm_namespace}/*"
       },
       {
         Sid      = "KMSDecrypt"

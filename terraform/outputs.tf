@@ -3,12 +3,12 @@
 
 output "public_ip" {
   value       = aws_eip.portfolio.public_ip
-  description = "Portfolio public IP — stored automatically in SSM at /rerktserver/portfolio/eip"
+  description = "Portfolio public IP — stored automatically in SSM at /<ssm_namespace>/portfolio/eip"
 }
 
 output "instance_id" {
   value       = aws_instance.portfolio.id
-  description = "EC2 instance ID — stored automatically in SSM at /rerktserver/portfolio/instance-id"
+  description = "EC2 instance ID — stored automatically in SSM at /<ssm_namespace>/portfolio/instance-id"
 }
 
 output "ecr_repository_url" {

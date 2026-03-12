@@ -1,9 +1,25 @@
-cat > ~/Documents/github-projects/rerktserver-aws-project/aws-server/terraform/terraform.tfvars.example << 'EOF'
+# ── terraform.tfvars.example ──────────────────────────────────
+# Copy to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# ── Required ──────────────────────────────────────────────────
 aws_region    = "us-east-1"
+domain_name   = "yourdomain.com"          # Must exist as a Route53 hosted zone
+admin_email   = "you@example.com"         # Let's Encrypt cert expiry notifications
+key_pair_name = "your-key-pair-name"      # Must already exist in EC2 → Key Pairs
+your_ip_cidr  = "YOUR.IP.HERE/32"         # Run: curl ifconfig.me — SSH restricted to this IP
+github_org    = "your-github-username"    # GitHub username or org that owns the repos
+
+# ── Sensitive — pass via env var instead of storing here ──────
+# anthropic_api_key = "sk-ant-..."        # Better: export TF_VAR_anthropic_api_key=sk-ant-...
+
+# ── Optional — defaults shown ─────────────────────────────────
 environment   = "production"
-instance_type = "t3.nano"
-key_pair_name = "your-key-pair-name"
-your_ip_cidr  = "YOUR.IP.HERE/32"
-domain_name   = "yourdomain.com"
-admin_email   = "you@example.com"
-EOF
+instance_type = "t3.nano"       # t3.nano ~$3.50/mo, t3.micro ~$7.50/mo
+github_repo   = "aws-server"    # This repo's name
+grafana_repo  = "aws-grafana"   # Companion Grafana repo name (for OIDC trust)
+ssm_namespace = "myproject"     # SSM Parameter Store prefix: /myproject/portfolio/eip etc.
+ai_image_name = "chat-ai"      # ECR repo name for AI chat proxy — also set AI_IMAGE_NAME GitHub variable to match
+grafana_active = false          # Set to true when aws-grafana stack is deployed
