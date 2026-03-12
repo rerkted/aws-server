@@ -454,6 +454,7 @@ These tell the pipeline which SSM namespace and domain to use. Go to the same **
 |----------|-------|-------------|
 | `SSM_NAMESPACE` | `myproject` | Must match `ssm_namespace` in your tfvars |
 | `DOMAIN_NAME` | `yourdomain.com` | Your root domain |
+| `AI_IMAGE_NAME` | `chat-ai` | Must match `ai_image_name` in your tfvars — ECR repo name for the AI chat proxy |
 
 > **Why variables and not secrets?** These aren't sensitive — they're just config. Variables are visible in logs which makes debugging easier.
 
@@ -843,6 +844,7 @@ AWS Secrets Manager → /your-namespace/anthropic-api-key (encrypted)
 |----------|-------|-----------|
 | `SSM_NAMESPACE` | Must match `ssm_namespace` in tfvars (e.g. `myproject`) | Yes |
 | `DOMAIN_NAME` | Your root domain (e.g. `yourdomain.com`) | Yes |
+| `AI_IMAGE_NAME` | Must match `ai_image_name` in tfvars (e.g. `chat-ai`) | Yes |
 
 Everything else (instance ID, IP, API key) is read from SSM Parameter Store at runtime automatically.
 

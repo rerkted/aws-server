@@ -95,6 +95,7 @@ Go to your repo → **Settings → Secrets and variables → Actions**:
 |----------|-------|
 | `SSM_NAMESPACE` | Must match `ssm_namespace` in your tfvars (e.g. `myproject`) |
 | `DOMAIN_NAME` | Your root domain (e.g. `yourdomain.com`) |
+| `AI_IMAGE_NAME` | Must match `ai_image_name` in your tfvars (e.g. `chat-ai`) |
 
 ### 5. Push to Deploy
 
