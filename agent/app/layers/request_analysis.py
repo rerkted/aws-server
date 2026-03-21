@@ -32,7 +32,7 @@ async def analyze_request(message: str, api_key: str) -> Intent:
 
     text = response.content[0].text.strip()
 
-    # Strip markdown code fences if present
+    # Extract JSON — handle markdown fences or leading/trailing prose
     if "```" in text:
         parts = text.split("```")
         for part in parts:
@@ -42,6 +42,13 @@ async def analyze_request(message: str, api_key: str) -> Intent:
             if part.startswith("{"):
                 text = part
                 break
+
+    # Find the first { ... } block if model added surrounding text
+    if not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            text = text[start:end]
 
     data = json.loads(text)
     return Intent(**data)

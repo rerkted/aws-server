@@ -124,6 +124,13 @@ Generate the execution plan."""
                 text = part
                 break
 
+    # Find the first { ... } block if model added surrounding text
+    if not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            text = text[start:end]
+
     data = json.loads(text)
     ops = [PlanOperation(**op) for op in data.get("operations", [])]
     return ExecutionPlan(
