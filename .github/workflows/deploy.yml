@@ -113,7 +113,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Scan portfolio image (Trivy)
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
           format: table
@@ -122,7 +122,7 @@ jobs:
           severity: 'CRITICAL'
 
       - name: Scan Rerkt.AI image (Trivy)
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AI_IMAGE_NAME }}:latest
           format: table
@@ -142,7 +142,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Scan Agent AI image (Trivy)
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_IMAGE_NAME }}:latest
           format: table
