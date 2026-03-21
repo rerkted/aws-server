@@ -93,6 +93,7 @@ resource "aws_iam_instance_profile" "portfolio" {
 # Agent AI — EC2 read/modify permissions for infrastructure discovery and execution
 resource "aws_iam_role_policy" "agent_permissions" {
   #checkov:skip=CKV_AWS_355:ec2:Describe* and route53:List* require wildcard — no resource-level restriction supported
+  #checkov:skip=CKV_AWS_290:ec2:StartInstances/StopInstances/AuthorizeSecurityGroupIngress require wildcard resource — EC2 resource-level restrictions require tag conditions not applicable here
   name = "agent-infrastructure-policy"
   role = aws_iam_role.ec2_portfolio.name
 
