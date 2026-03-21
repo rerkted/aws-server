@@ -299,15 +299,15 @@
       </div>
       <div class="project-card">
         <div class="project-number">Project 07</div>
-        <div class="project-name">Rerkt.AI Bedrock &mdash; Native AWS AI Integration</div>
-        <div class="project-desc">Extended the AI assistant using AWS Bedrock instead of the Anthropic API directly. The Node.js proxy authenticates via EC2 IAM instance role — no API keys required. Demonstrates the architectural difference between external API calls and native AWS AI services. Deployed as a third container on the same EC2 with a dedicated subdomain, SSL cert, and daily request cap to control costs.</div>
-        <div class="project-tech"><span class="tag">AWS Bedrock</span><span class="tag">IAM Roles</span><span class="tag">Node.js</span><span class="tag">Docker</span><span class="tag">nginx</span><span class="tag">Claude Haiku</span></div>
-        <a href="https://bedrock.rerktserver.com" target="_blank" class="project-link">Try it live &rarr;</a>
+        <div class="project-name">Infrastructure AI Agent &mdash; 4-Layer AIOps</div>
+        <div class="project-desc">Built a production-grade AI agent that understands live AWS infrastructure. Four-layer architecture: natural language request analysis (Claude), real-time state discovery (boto3 scans EC2, VPCs, SGs, ECR), intelligent planning (Claude reasons over current state to generate phased execution plans), and a human-gated executor. WebSocket-based chat UI streams each layer&rsquo;s output in real time. Mutating operations require explicit approval before anything changes.</div>
+        <div class="project-tech"><span class="tag">Python</span><span class="tag">FastAPI</span><span class="tag">Claude API</span><span class="tag">boto3</span><span class="tag">WebSocket</span><span class="tag">Docker</span><span class="tag">nginx</span><span class="tag">EC2</span></div>
+        <a href="https://agent.rerktserver.com" target="_blank" class="project-link">Try it live &rarr;</a>
       </div>
       <div class="project-card">
         <div class="project-number">Project 08</div>
         <div class="project-name">Centralized Log Observability &mdash; Grafana + Loki</div>
-        <div class="project-desc">Deployed a dedicated observability stack on a separate EC2 instance. Promtail collects Docker container logs from the portfolio EC2 and ships them to Loki over a private VPC connection. Grafana visualizes real-time logs from all three containers (portfolio, rerkt-ai, bedrock-ai) at grafana.rerktserver.com. Access restricted to whitelisted IP via AWS Security Group.</div>
+        <div class="project-desc">Deployed a dedicated observability stack on a separate EC2 instance. Promtail collects Docker container logs from the portfolio EC2 and ships them to Loki over a private VPC connection. Grafana visualizes real-time logs from all containers (portfolio, rerkt-ai, agent-ai) at grafana.rerktserver.com. Access restricted to whitelisted IP via AWS Security Group.</div>
         <div class="project-tech"><span class="tag">Grafana</span><span class="tag">Loki</span><span class="tag">Promtail</span><span class="tag">Docker Compose</span><span class="tag">EC2</span><span class="tag">VPC</span><span class="tag">nginx</span><span class="tag">Terraform</span></div>
         <div class="project-note">&#9432; This instance is stopped when not in use to save cost. Reach out if you'd like a live demo.</div>
         <a href="https://grafana.rerktserver.com" target="_blank" class="project-link">View dashboard &rarr;</a>
@@ -317,13 +317,6 @@
         <div class="project-name">Zero Hardcoded Infrastructure &mdash; SSM Parameter Store</div>
         <div class="project-desc">Eliminated all hardcoded IPs and instance IDs from GitHub secrets and CI/CD pipelines. EC2 instance IDs and Elastic IPs are now written to AWS SSM Parameter Store by Terraform on every apply. GitHub Actions workflows query SSM at runtime to discover targets dynamically &mdash; no manual secret rotation when infrastructure is destroyed and recreated. The Grafana security group automatically locks to the portfolio EC2&rsquo;s current EIP, and Promtail reads the Loki endpoint from SSM at boot. Zero static credentials, zero manual updates.</div>
         <div class="project-tech"><span class="tag">AWS SSM Parameter Store</span><span class="tag">Terraform</span><span class="tag">GitHub Actions</span><span class="tag">IAM</span><span class="tag">Dynamic Config</span></div>
-      </div>
-      <div class="project-card">
-        <div class="project-number">Project 10</div>
-        <div class="project-name">Infrastructure AI Agent &mdash; 4-Layer AIOps</div>
-        <div class="project-desc">Built a production-grade AI agent that understands live AWS infrastructure. Four-layer architecture: natural language request analysis (Claude), real-time state discovery (boto3 scans EC2, VPCs, SGs, ECR), intelligent planning (Claude reasons over current state to generate phased execution plans), and a human-gated executor. WebSocket-based chat UI streams each layer&rsquo;s output in real time. Mutating operations require explicit approval before anything changes.</div>
-        <div class="project-tech"><span class="tag">Python</span><span class="tag">FastAPI</span><span class="tag">Claude API</span><span class="tag">boto3</span><span class="tag">WebSocket</span><span class="tag">Docker</span><span class="tag">nginx</span><span class="tag">EC2</span></div>
-        <a href="https://agent.rerktserver.com" target="_blank" class="project-link">Try it live &rarr;</a>
       </div>
     </div>
   </section>
