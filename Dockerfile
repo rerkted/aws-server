@@ -16,10 +16,6 @@ COPY ./website/ /usr/share/nginx/html/
 RUN mkdir -p /usr/share/nginx/ai
 COPY ./chat/index.html /usr/share/nginx/ai/
 
-# Copy Rerkt.AI Bedrock UI
-RUN mkdir -p /usr/share/nginx/bedrock
-COPY ./bedrock/index.html /usr/share/nginx/bedrock/
-
 # Copy nginx configs
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-ssl.conf /etc/nginx/nginx-ssl.conf
@@ -31,8 +27,8 @@ RUN sed -i "s/DOMAIN_NAME/${DOMAIN_NAME}/g" /etc/nginx/nginx-ssl.conf
 RUN mkdir -p /var/www/certbot
 
 # Fix permissions
-RUN chown -R nginx:nginx /usr/share/nginx/html /usr/share/nginx/ai /usr/share/nginx/bedrock && \
-    chmod -R 755 /usr/share/nginx/html /usr/share/nginx/ai /usr/share/nginx/bedrock
+RUN chown -R nginx:nginx /usr/share/nginx/html /usr/share/nginx/ai && \
+    chmod -R 755 /usr/share/nginx/html /usr/share/nginx/ai
 
 EXPOSE 80 443
 
