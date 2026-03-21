@@ -89,3 +89,56 @@ resource "aws_iam_instance_profile" "portfolio" {
   name = "portfolio-instance-profile"
   role = aws_iam_role.ec2_portfolio.name
 }
+
+# Agent AI — EC2 read/modify permissions for infrastructure discovery and execution
+resource "aws_iam_role_policy" "agent_permissions" {
+  #checkov:skip=CKV_AWS_355:ec2:Describe* and route53:List* require wildcard — no resource-level restriction supported
+  name = "agent-infrastructure-policy"
+  role = aws_iam_role.ec2_portfolio.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EC2Discover"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeAddresses",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeInternetGateways"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "EC2Modify"
+        Effect = "Allow"
+        Action = [
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRDiscover"
+        Effect = "Allow"
+        Action = [
+          "ecr:DescribeRepositories",
+          "ecr:ListImages"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "SSMWrite"
+        Effect = "Allow"
+        Action = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/${var.ssm_namespace}/*"
+      }
+    ]
+  })
+}

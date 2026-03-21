@@ -14,6 +14,7 @@ env:
   IMAGE_NAME: portfolio
   AI_IMAGE_NAME: ${{ vars.AI_IMAGE_NAME || 'chat-ai' }}
   BEDROCK_IMAGE_NAME: bedrock-ai
+  AGENT_IMAGE_NAME: agent-ai
   SSM_NAMESPACE: ${{ vars.SSM_NAMESPACE || 'rerktserver' }}
   DOMAIN_NAME: ${{ vars.DOMAIN_NAME || 'rerktserver.com' }}
 
@@ -86,6 +87,15 @@ jobs:
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest
 
+      - name: Extract metadata (agent)
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -141,10 +151,30 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL'
 
+      - name: Build and push Agent AI image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agent
+          push: true
+          tags: ${{ steps.meta-agent.outputs.tags }}
+          labels: ${{ steps.meta-agent.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
       - name: Scan Bedrock AI image (Trivy)
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL'
+
+      - name: Scan Agent AI image (Trivy)
+        uses: aquasecurity/trivy-action@0.34.2
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.AGENT_IMAGE_NAME }}:latest
           format: table
           exit-code: '1'
           ignore-unfixed: true
@@ -173,6 +203,7 @@ jobs:
           PORTFOLIO_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.IMAGE_NAME }}:latest"
           AI_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AI_IMAGE_NAME }}:latest"
           BEDROCK_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.BEDROCK_IMAGE_NAME }}:latest"
+          AGENT_IMAGE="${{ needs.build.outputs.ecr-registry }}/${{ env.AGENT_IMAGE_NAME }}:latest"
           INSTANCE_ID=$(aws ssm get-parameter \
             --name "/${{ env.SSM_NAMESPACE }}/portfolio/instance-id" \
             --query "Parameter.Value" \
@@ -200,7 +231,13 @@ jobs:
               \"docker pull $BEDROCK_IMAGE\",
               \"docker stop bedrock-ai || true\",
               \"docker rm bedrock-ai || true\",
-              \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 -e DOMAIN_NAME=${{ env.DOMAIN_NAME }} $BEDROCK_IMAGE\"
+              \"docker run -d --name bedrock-ai --restart always -p 172.17.0.1:3002:3002 -e DOMAIN_NAME=${{ env.DOMAIN_NAME }} $BEDROCK_IMAGE\",
+
+              \"docker pull $AGENT_IMAGE\",
+              \"docker stop agent-ai || true\",
+              \"docker rm agent-ai || true\",
+              \"AGENT_KEY=\$(aws ssm get-parameter --name /${{ env.SSM_NAMESPACE }}/anthropic-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
+              \"docker run -d --name agent-ai --restart always -p 172.17.0.1:3003:3003 -e ANTHROPIC_API_KEY=\$AGENT_KEY -e AWS_REGION=${{ env.AWS_REGION }} $AGENT_IMAGE\"
             ]" \
             --query "Command.CommandId" \
             --output text)
@@ -284,6 +321,15 @@ jobs:
             exit 1
           fi
           echo "Bedrock AI health check passed — HTTP $STATUS"
+
+      - name: Health check — Agent AI
+        run: |
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://agent.${{ env.DOMAIN_NAME }}/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Agent AI health check failed — HTTP $STATUS"
+            exit 1
+          fi
+          echo "Agent AI health check passed — HTTP $STATUS"
 
   # ── STAGE 5: DAST ─────────────────────────────────────────────
   dast:

@@ -58,7 +58,8 @@ certbot certonly \
   -d "$DOMAIN" \
   -d "www.$DOMAIN" \
   -d "ai.$DOMAIN" \
-  -d "bedrock.$DOMAIN"
+  -d "bedrock.$DOMAIN" \
+  -d "agent.$DOMAIN"
 
 echo "SSL cert issued successfully at $(date)"
 

@@ -97,7 +97,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Resource = [
           aws_ecr_repository.portfolio.arn,
           aws_ecr_repository.rerkt_ai.arn,
-          aws_ecr_repository.bedrock_ai.arn
+          aws_ecr_repository.bedrock_ai.arn,
+          aws_ecr_repository.agent_ai.arn
         ]
       },
       {
