@@ -186,10 +186,13 @@ jobs:
             --parameters commands="[
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
 
+              \"AGENT_ALLOWED_IP=\$(aws ssm get-parameter --name /${{ env.SSM_NAMESPACE }}/agent/allowed-ip --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
+              \"mkdir -p /etc/nginx/conf.d && echo \\\"allow \$AGENT_ALLOWED_IP; deny all;\\\" > /etc/nginx/conf.d/agent-allowlist.conf\",
+
               \"docker pull $PORTFOLIO_IMAGE\",
               \"docker stop portfolio || true\",
               \"docker rm portfolio || true\",
-              \"docker run -d --name portfolio --restart always -p 80:80 -p 443:443 -v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot $PORTFOLIO_IMAGE nginx -c /etc/nginx/nginx-ssl.conf -g 'daemon off;'\",
+              \"docker run -d --name portfolio --restart always -p 80:80 -p 443:443 -v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot -v /etc/nginx/conf.d:/etc/nginx/conf.d:ro $PORTFOLIO_IMAGE nginx -c /etc/nginx/nginx-ssl.conf -g 'daemon off;'\",
 
               \"docker pull $AI_IMAGE\",
               \"docker stop rerkt-ai || true\",
