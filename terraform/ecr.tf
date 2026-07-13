@@ -74,6 +74,18 @@ resource "aws_ecr_lifecycle_policy" "rerkt_ai" {
 }
 
 # ─── ECR repo for Bedrock AI proxy ────────────────────────────
+# bedrock-ai was decommissioned (see agent.tf / this session's history)
+# but this repo and its IAM/deploy references were never cleaned up,
+# so CI kept silently rebuilding and redeploying it. Removing it now,
+# in two steps as required by `prevent_destroy`:
+#   1. (this change) flip prevent_destroy to false, apply — safe,
+#      destroys nothing yet, just removes the protection.
+#   2. (follow-up change) delete this resource block and its
+#      lifecycle-policy resource below, apply again — this actually
+#      deletes the ECR repo and any images in it.
+# Do not skip straight to step 2 — Terraform will refuse to destroy
+# a resource that had prevent_destroy=true in the last-applied config
+# unless the flip in step 1 has already been applied first.
 resource "aws_ecr_repository" "bedrock_ai" {
   #checkov:skip=CKV_AWS_51:MUTABLE tags required — CI/CD pipeline uses the `latest` tag for rolling deployments
   #checkov:skip=CKV_AWS_136:AWS-managed encryption is sufficient for this ECR use case
@@ -86,7 +98,7 @@ resource "aws_ecr_repository" "bedrock_ai" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false # was true — step 1 of the removal, see comment above
   }
 
   tags = { Name = "bedrock-ai-ecr" }

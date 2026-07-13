@@ -161,11 +161,34 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # Deployed independently of the container fleet below — the Lambda
+      # function itself must already exist (via `terraform apply`, see
+      # migration plan) before this step can succeed. Runs first so a
+      # packaging/deploy failure here surfaces fast, before the much
+      # longer SSM container deploy below.
+      - name: Package and deploy chat-ai Lambda
+        run: |
+          cd chat
+          npm ci --omit=dev
+          zip -rq ../chat-ai-lambda.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name chat-ai \
+            --zip-file fileb://chat-ai-lambda.zip \
+            --region ${{ env.AWS_REGION }} > /dev/null
+          aws lambda wait function-updated \
+            --function-name chat-ai \
+            --region ${{ env.AWS_REGION }}
+          echo "chat-ai Lambda code updated"
 
       - name: Deploy via SSM
         timeout-minutes: 70
@@ -271,14 +294,53 @@ jobs:
           fi
           echo "Portfolio health check passed — HTTP $STATUS"
 
-      - name: Health check — Rerkt.AI
+      - name: Health check — Rerkt.AI (nginx reachability)
         run: |
+          # Note: this only confirms nginx itself is up — nginx answers
+          # /health directly (see nginx-ssl.conf) without ever reaching
+          # the backend. The step below actually tests the backend.
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://ai.${{ env.DOMAIN_NAME }}/health)
           if [ "$STATUS" != "200" ]; then
             echo "Rerkt.AI health check failed — HTTP $STATUS"
             exit 1
           fi
           echo "Rerkt.AI health check passed — HTTP $STATUS"
+
+      - name: Health check — chat-ai Lambda (direct invoke)
+        run: |
+          # Constructs a minimal Function URL (API Gateway v2 payload
+          # format) event for GET /health and invokes the Lambda directly
+          # — this is the first real end-to-end test of the SSM secret
+          # fetch + Express app + serverless-http chain, independent of
+          # whether nginx has been cut over to it yet. Best-effort event
+          # shape based on the standard v2.0 payload format — verify this
+          # step passes on the first real run and adjust if needed.
+          cat > /tmp/health-event.json <<'EOF'
+          {
+            "version": "2.0",
+            "routeKey": "GET /health",
+            "rawPath": "/health",
+            "rawQueryString": "",
+            "headers": {},
+            "requestContext": {
+              "http": { "method": "GET", "path": "/health", "sourceIp": "0.0.0.0" }
+            },
+            "isBase64Encoded": false
+          }
+          EOF
+          aws lambda invoke \
+            --function-name chat-ai \
+            --payload file:///tmp/health-event.json \
+            --cli-binary-format raw-in-base64-out \
+            --region ${{ env.AWS_REGION }} \
+            /tmp/health-response.json
+          cat /tmp/health-response.json
+          STATUS_CODE=$(python3 -c "import json; print(json.load(open('/tmp/health-response.json')).get('statusCode', 'missing'))")
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "chat-ai Lambda health check failed — statusCode: $STATUS_CODE"
+            exit 1
+          fi
+          echo "chat-ai Lambda health check passed"
 
       - name: Health check — Agent AI
         run: |

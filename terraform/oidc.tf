@@ -96,8 +96,11 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         ]
         Resource = [
           aws_ecr_repository.portfolio.arn,
+          # rerkt_ai (chat-ai container image) stays here until the Lambda
+          # cutover is confirmed and the container is removed — see chat.tf
+          # and the migration plan. Do not remove early or CI's existing
+          # container build/push step for it will start failing.
           aws_ecr_repository.rerkt_ai.arn,
-          aws_ecr_repository.bedrock_ai.arn,
           aws_ecr_repository.agent_ai.arn
         ]
       },
@@ -118,6 +121,18 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Effect   = "Allow"
         Action   = ["ec2:DescribeInstances"]
         Resource = "*"
+      },
+      {
+        Sid    = "LambdaDeploy"
+        Effect = "Allow"
+        Action = [
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:InvokeFunction" # used by deploy.yml's verify-stage health check
+        ]
+        Resource = [aws_lambda_function.chat_ai.arn]
       }
     ]
   })

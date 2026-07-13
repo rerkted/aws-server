@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY server.js .
+COPY server.js app.js ./
 
 # Run as non-root user
 RUN addgroup -S rerktai && adduser -S rerktai -G rerktai
