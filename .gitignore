@@ -9,3 +9,7 @@ terraform/*.tfplan
 .DS_Store
 CLAUDE.md
 .claude/
+
+# Node
+node_modules/
+*.zip
