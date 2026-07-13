@@ -65,7 +65,19 @@ YOUR_SKILLS_LIST
 
 // ─── MIDDLEWARE ────────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: false // handled by nginx
+  // Mirrors the CSP already enforced at the nginx layer for ai.DOMAIN_NAME,
+  // so the app is still protected if it's ever reached without nginx in front.
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
 }));
 
 app.use(cors({

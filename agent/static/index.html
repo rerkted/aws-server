@@ -328,7 +328,7 @@
 
       const instanceRows = (state.ec2_instances || []).map(i => `
         <div class="resource-row">
-          <span class="r-state ${i.state === 'running' ? 'r-running' : 'r-stopped'}">${i.state}</span>
+          <span class="r-state ${i.state === 'running' ? 'r-running' : 'r-stopped'}">${escHtml(i.state)}</span>
           <span class="r-name">${escHtml(i.name)}</span>
           <span class="r-meta">${escHtml(i.instance_type)} · ${escHtml(i.az)} · ${escHtml(i.public_ip || i.private_ip)}</span>
         </div>`).join('');
@@ -380,7 +380,7 @@
 
       const opsHtml = (plan.operations || []).map(op => `
         <div class="plan-phase">
-          <span class="op-action op-${op.action}">${op.action}</span>
+          <span class="op-action op-${escHtml(op.action)}">${escHtml(op.action)}</span>
           <div class="op-body">
             <div class="op-resource">${escHtml(op.resource_type)} · <strong>${escHtml(op.resource_name)}</strong></div>
             <div class="op-details">${escHtml(op.details)}</div>
