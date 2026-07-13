@@ -342,7 +342,7 @@
       const ecrRows = (state.ecr_repos || []).map(r => `
         <div class="resource-row">
           <span class="r-name">${escHtml(r.name)}</span>
-          <span class="r-meta">${r.image_count} images</span>
+          <span class="r-meta">${escHtml(String(r.image_count))} images</span>
         </div>`).join('');
 
       const eipRows = (state.eips || []).map(e => `
