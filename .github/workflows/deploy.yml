@@ -170,13 +170,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Deployed independently of the container fleet below — the Lambda
-      # function itself must already exist (via `terraform apply`, see
-      # migration plan) before this step can succeed. Runs first so a
-      # packaging/deploy failure here surfaces fast, before the much
-      # longer SSM container deploy below.
+      # Deployed independently of the container fleet below. Skips
+      # gracefully (does not fail the job) if the function doesn't exist
+      # yet — it's created by `terraform apply` (local state, applied
+      # manually, see migration plan), not by this pipeline. Runs before
+      # the SSM container deploy so a real packaging failure (once the
+      # function exists) surfaces fast, without ever blocking the
+      # container deploy that follows — that deploy must succeed
+      # regardless of this Lambda step's outcome.
       - name: Package and deploy chat-ai Lambda
         run: |
+          if ! aws lambda get-function --function-name chat-ai --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "chat-ai Lambda function doesn't exist yet (run terraform apply first) — skipping, not failing the build"
+            exit 0
+          fi
           cd chat
           npm ci --omit=dev
           zip -rq ../chat-ai-lambda.zip .
@@ -308,6 +315,13 @@ jobs:
 
       - name: Health check — chat-ai Lambda (direct invoke)
         run: |
+          # Skips gracefully (does not fail the build) until the function
+          # exists — see the note on the "Package and deploy chat-ai
+          # Lambda" step in the deploy job.
+          if ! aws lambda get-function --function-name chat-ai --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "chat-ai Lambda function doesn't exist yet — skipping, not failing the build"
+            exit 0
+          fi
           # Constructs a minimal Function URL (API Gateway v2 payload
           # format) event for GET /health and invokes the Lambda directly
           # — this is the first real end-to-end test of the SSM secret
