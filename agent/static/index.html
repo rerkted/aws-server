@@ -356,7 +356,7 @@
 
       el.innerHTML = `<div class="state-card">
         <div class="state-header" onclick="toggleState(this)">
-          <div class="state-title">⬡ Live Infrastructure State · ${escHtml(state.region)} · scanned ${new Date(state.scanned_at).toLocaleTimeString()}</div>
+          <div class="state-title">⬡ Live Infrastructure State · ${escHtml(state.region)} · scanned ${escHtml(new Date(state.scanned_at).toLocaleTimeString())}</div>
           <span class="state-toggle open">▲</span>
         </div>
         <div class="state-body open">
@@ -392,7 +392,7 @@
           <div>
             <div class="plan-title-row">
               <span class="plan-title">⚡ Execution Plan</span>
-              <span class="risk-badge risk-${plan.risk_level}">${plan.risk_level} risk</span>
+              <span class="risk-badge risk-${escHtml(plan.risk_level)}">${escHtml(plan.risk_level)} risk</span>
             </div>
             <div class="plan-summary">${escHtml(plan.intent_summary)}</div>
             <div class="plan-impact">${escHtml(plan.estimated_impact)}</div>
