@@ -128,6 +128,20 @@ resource "aws_lambda_function_url" "chat_ai" {
   authorization_type = "NONE"
 }
 
+# authorization_type = "NONE" above is necessary but not sufficient —
+# AWS also requires this explicit resource-based permission before an
+# unauthenticated Function URL will actually accept anonymous requests.
+# Without it, every request gets rejected with a "Forbidden" response
+# regardless of the auth type setting.
+resource "aws_lambda_permission" "chat_ai_function_url_public" {
+  #checkov:skip=CKV_AWS_301:intentional, same reasoning as CKV_AWS_258 above — nginx is the sole real-world caller and already provides TLS, custom domain, and rate limiting in front of this endpoint
+  statement_id           = "AllowPublicFunctionUrlInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.chat_ai.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
 output "chat_ai_function_url" {
   value       = aws_lambda_function_url.chat_ai.function_url
   description = "Set this as the proxy_pass target host in nginx-ssl.conf's ai.DOMAIN_NAME /api/ block once ready to cut over (see migration plan)"
