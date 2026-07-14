@@ -142,6 +142,21 @@ resource "aws_lambda_permission" "chat_ai_function_url_public" {
   function_url_auth_type = "NONE"
 }
 
+# Confirmed via direct testing (and the Lambda console's own diagnostic
+# message) that the InvokeFunctionUrl permission above is necessary but
+# STILL not sufficient on its own — Function URLs also require a plain
+# lambda:InvokeFunction grant, without the function_url_auth_type
+# condition (that condition key is only valid on InvokeFunctionUrl).
+# Without this second statement, every request returns 403 even with
+# AuthType=NONE and a correct InvokeFunctionUrl grant in place.
+resource "aws_lambda_permission" "chat_ai_function_invoke_public" {
+  #checkov:skip=CKV_AWS_301:same reasoning as chat_ai_function_url_public above
+  statement_id  = "AllowPublicFunctionInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.chat_ai.function_name
+  principal     = "*"
+}
+
 output "chat_ai_function_url" {
   value       = aws_lambda_function_url.chat_ai.function_url
   description = "Set this as the proxy_pass target host in nginx-ssl.conf's ai.DOMAIN_NAME /api/ block once ready to cut over (see migration plan)"
