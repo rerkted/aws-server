@@ -3,15 +3,23 @@
 #
 # nginx on the portfolio EC2 instance remains the front door for
 # ai.DOMAIN_NAME (TLS, static chat UI, rate limiting) — only the
-# /api/ backend runs on Lambda now. No DNS/ACM changes needed here;
-# nginx's proxy_pass target is what points at the Lambda instead.
+# /api/ backend runs on Lambda now. nginx's proxy_pass target is what
+# points at the Lambda.
+#
+# ai.DOMAIN_NAME → CloudFront (Phase 2 of the CloudFront rollout — see
+# cloudfront.tf's aws_cloudfront_distribution.ai and the migration
+# plan). agent. stays on a direct EIP record until its own later phase.
 
 resource "aws_route53_record" "ai" {
   zone_id = data.aws_route53_zone.domain.zone_id
   name    = "ai.${var.domain_name}"
   type    = "A"
-  ttl     = 300
-  records = [aws_eip.portfolio.public_ip]
+
+  alias {
+    name                   = aws_cloudfront_distribution.ai.domain_name
+    zone_id                = aws_cloudfront_distribution.ai.hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 # ─── Lambda: chat-ai backend ───────────────────────────────────

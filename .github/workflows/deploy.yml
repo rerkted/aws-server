@@ -209,6 +209,26 @@ jobs:
             --output text)
           REGISTRY="${{ needs.build.outputs.ecr-registry }}"
 
+          # Built here (runner-side, with jq) rather than as an inline
+          # JSON-parsing script inside the SSM commands array below —
+          # deeply nested quoting in that array is fragile (see
+          # cloudfront.tf's git history for an unrelated but similar
+          # escaping bug). IPv4 only: CloudFront's connections to
+          # custom origins are IPv4-only regardless of is_ipv6_enabled
+          # on the viewer side, so IPv6 ranges aren't needed here.
+          REALIP_CONF=$(
+            curl -s https://ip-ranges.amazonaws.com/ip-ranges.json \
+              | jq -r '.prefixes[] | select(.service=="CLOUDFRONT") | "set_real_ip_from \(.ip_prefix);"'
+          )
+          REALIP_CONF="${REALIP_CONF}
+          real_ip_header X-Forwarded-For;
+          real_ip_recursive on;"
+          REALIP_CONF_B64=$(echo "$REALIP_CONF" | base64 -w0)
+          if [ "${#REALIP_CONF_B64}" -gt 80000 ]; then
+            echo "CloudFront IP range list grew unexpectedly large (${#REALIP_CONF_B64} chars base64) — failing fast rather than risking an SSM size error"
+            exit 1
+          fi
+
           COMMAND=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -218,6 +238,8 @@ jobs:
 
               \"AGENT_ALLOWED_IP=\$(aws ssm get-parameter --name /${{ env.SSM_NAMESPACE }}/agent/allowed-ip --query Parameter.Value --output text --region ${{ env.AWS_REGION }})\",
               \"mkdir -p /etc/nginx/conf.d && echo \\\"allow \$AGENT_ALLOWED_IP; deny all;\\\" > /etc/nginx/conf.d/agent-allowlist.conf\",
+
+              \"echo $REALIP_CONF_B64 | base64 -d > /etc/nginx/conf.d/cloudfront-realip.conf\",
 
               \"docker pull $PORTFOLIO_IMAGE\",
               \"docker stop portfolio || true\",
@@ -282,6 +304,22 @@ jobs:
         run: |
           DIST_ID=$(aws ssm get-parameter \
             --name "/${{ env.SSM_NAMESPACE }}/portfolio/cloudfront-distribution-id" \
+            --query "Parameter.Value" --output text 2>/dev/null) || {
+            echo "No CloudFront distribution yet (run terraform apply first) — skipping, not failing the build"
+            exit 0
+          }
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/*" > /dev/null
+          echo "CloudFront invalidation requested for distribution $DIST_ID"
+
+      # Same reasoning as the portfolio invalidation above, for the
+      # ai. chat UI's separate distribution — see terraform/cloudfront.tf.
+      # Skips gracefully until Phase 2's distribution exists.
+      - name: Invalidate CloudFront cache (ai)
+        run: |
+          DIST_ID=$(aws ssm get-parameter \
+            --name "/${{ env.SSM_NAMESPACE }}/ai/cloudfront-distribution-id" \
             --query "Parameter.Value" --output text 2>/dev/null) || {
             echo "No CloudFront distribution yet (run terraform apply first) — skipping, not failing the build"
             exit 0

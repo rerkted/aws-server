@@ -135,10 +135,13 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         Resource = [aws_lambda_function.chat_ai.arn]
       },
       {
-        Sid      = "CloudFrontInvalidate"
-        Effect   = "Allow"
-        Action   = ["cloudfront:CreateInvalidation"]
-        Resource = aws_cloudfront_distribution.portfolio.arn
+        Sid    = "CloudFrontInvalidate"
+        Effect = "Allow"
+        Action = ["cloudfront:CreateInvalidation"]
+        Resource = [
+          aws_cloudfront_distribution.portfolio.arn,
+          aws_cloudfront_distribution.ai.arn
+        ]
       }
     ]
   })
