@@ -30,19 +30,25 @@ resource "aws_acm_certificate" "portfolio" {
 }
 
 resource "aws_route53_record" "acm_validation" {
+  # Keyed on resource_record_name, not domain_name: an apex + wildcard
+  # SAN pair (rerktserver.com + *.rerktserver.com) frequently validates
+  # via the identical CNAME from ACM. Keying by domain_name would try to
+  # create that same Route53 record twice and collide — this dedupes it
+  # to exactly one record whenever that happens.
   for_each = {
-    for dvo in aws_acm_certificate.portfolio.domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.portfolio.domain_validation_options : dvo.resource_record_name => {
       name  = dvo.resource_record_name
       type  = dvo.resource_record_type
       value = dvo.resource_record_value
     }
   }
 
-  zone_id = data.aws_route53_zone.domain.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 300
-  records = [each.value.value]
+  zone_id         = data.aws_route53_zone.domain.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 300
+  records         = [each.value.value]
+  allow_overwrite = true
 }
 
 resource "aws_acm_certificate_validation" "portfolio" {
