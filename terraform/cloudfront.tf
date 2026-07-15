@@ -79,6 +79,8 @@ resource "aws_cloudfront_distribution" "portfolio" {
   #checkov:skip=CKV_AWS_374:Geo restriction intentionally left open — personal portfolio site, no audience restriction needed
   #checkov:skip=CKV2_AWS_32:Response headers policy not attached — nginx already sets all security headers (HSTS, CSP, X-Frame-Options, etc.) at the origin and CloudFront passes them through unchanged
   #checkov:skip=CKV_AWS_305:Default root object not set — nginx's own try_files/index handling already covers this at the origin
+  #checkov:skip=CKV_AWS_68:WAF intentionally out of scope for this rollout — real per-rule/per-request cost, conflicts with the no-additional-cost constraint on this phase. See migration plan.
+  #checkov:skip=CKV2_AWS_47:Same reasoning as CKV_AWS_68 — no WAFv2 WebACL attached by design (cost), so there's nothing to configure an AMR rule group on
   enabled         = true
   is_ipv6_enabled = true
   comment         = "portfolio root+www — Phase 1"
@@ -110,12 +112,14 @@ resource "aws_cloudfront_distribution" "portfolio" {
   }
 
   # Let's Encrypt HTTP-01 validation for the apex/www SANs must reach
-  # nginx unmodified — no redirect, no caching. Without this, root+www's
-  # own cert renewal breaks once their DNS points here instead of the EIP.
+  # nginx uncached. redirect-to-https (not allow-all) is safe here: the
+  # ACME validator follows HTTP->HTTPS redirects per RFC 8555, so this
+  # still round-trips to nginx correctly without permitting plaintext
+  # HTTP on this path.
   ordered_cache_behavior {
     path_pattern           = "/.well-known/acme-challenge/*"
     target_origin_id       = "portfolio-ec2"
-    viewer_protocol_policy = "allow-all"
+    viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled
