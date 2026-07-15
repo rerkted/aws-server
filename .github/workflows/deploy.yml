@@ -272,6 +272,25 @@ jobs:
 
           echo "Deployment complete"
 
+      # nginx doesn't set Cache-Control on / or index.html (only on
+      # fingerprinted static assets), so without this a push could take
+      # up to a day to show up publicly once CloudFront is in front —
+      # see terraform/cloudfront.tf. Skips gracefully (does not fail the
+      # build) until Phase 1's distribution exists — same pattern as the
+      # chat-ai Lambda step above.
+      - name: Invalidate CloudFront cache (portfolio)
+        run: |
+          DIST_ID=$(aws ssm get-parameter \
+            --name "/${{ env.SSM_NAMESPACE }}/portfolio/cloudfront-distribution-id" \
+            --query "Parameter.Value" --output text 2>/dev/null) || {
+            echo "No CloudFront distribution yet (run terraform apply first) — skipping, not failing the build"
+            exit 0
+          }
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/*" > /dev/null
+          echo "CloudFront invalidation requested for distribution $DIST_ID"
+
   # ── STAGE 4: Verify ───────────────────────────────────────────
   verify:
     name: "Stage 4 — Verify"

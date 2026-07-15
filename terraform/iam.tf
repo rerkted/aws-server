@@ -103,9 +103,9 @@ resource "aws_iam_role_policy" "agent_permissions" {
         Resource = "*"
       },
       {
-        Sid    = "SSMWrite"
-        Effect = "Allow"
-        Action = ["ssm:PutParameter"]
+        Sid      = "SSMWrite"
+        Effect   = "Allow"
+        Action   = ["ssm:PutParameter"]
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/${var.ssm_namespace}/*"
       }
     ]

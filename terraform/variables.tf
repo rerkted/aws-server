@@ -79,3 +79,9 @@ variable "ai_image_name" {
   type        = string
   default     = "chat-ai"
 }
+
+variable "cloudfront_price_class" {
+  description = "PriceClass_100 = US/Canada/Europe edge locations only. Doesn't affect Always Free tier eligibility (that applies regardless of price class) — just bounds worst-case $/GB if usage ever exceeds the free tier"
+  type        = string
+  default     = "PriceClass_100"
+}

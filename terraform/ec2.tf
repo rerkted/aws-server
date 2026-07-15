@@ -21,7 +21,7 @@ resource "aws_instance" "portfolio" {
     volume_size           = 30
     volume_type           = "gp3"
     delete_on_termination = true
-    encrypted             = true  # Encrypt EBS at rest
+    encrypted             = true # Encrypt EBS at rest
   }
 
   # Bootstrap script — installs Docker, pulls image, issues SSL cert
@@ -35,7 +35,7 @@ resource "aws_instance" "portfolio" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [ami, user_data]  # user_data only runs on first boot — changes don't affect running instance
+    ignore_changes        = [ami, user_data] # user_data only runs on first boot — changes don't affect running instance
   }
 
   tags = { Name = "portfolio-ec2" }

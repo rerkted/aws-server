@@ -9,11 +9,11 @@ resource "aws_ecr_repository" "portfolio" {
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
-    scan_on_push = true  # Free vulnerability scanning on every push
+    scan_on_push = true # Free vulnerability scanning on every push
   }
 
   lifecycle {
-    prevent_destroy = true  # Never accidentally delete the image registry
+    prevent_destroy = true # Never accidentally delete the image registry
   }
 
   tags = { Name = "portfolio-ecr" }

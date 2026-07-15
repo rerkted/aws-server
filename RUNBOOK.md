@@ -367,7 +367,7 @@ export TF_VAR_anthropic_api_key="sk-ant-api03-..."
 source ~/.zshrc
 ```
 
-> **Don't have an Anthropic API key?** The AI chat containers (`rerkt-ai`, `bedrock-ai`) are optional. You can set a placeholder value and the infrastructure will still deploy — the AI endpoints just won't work.
+> **Don't have an Anthropic API key?** The AI containers (`rerkt-ai`, `agent-ai`) are optional. You can set a placeholder value and the infrastructure will still deploy — the AI endpoints just won't work.
 > ```bash
 > export TF_VAR_anthropic_api_key="placeholder-not-used"
 > ```
@@ -523,7 +523,7 @@ git push origin main
 Go to your GitHub repo → **Actions** tab. You'll see a workflow run starting. It runs through:
 
 1. **Security** — Terraform static analysis + dependency vulnerability scan
-2. **Build** — Builds 3 Docker images (portfolio, AI chat, Bedrock) and pushes to ECR
+2. **Build** — Builds 3 Docker images (portfolio, AI chat, infra agent) and pushes to ECR
 3. **Deploy** — SSM sends a command to your EC2 to pull and restart the containers
 4. **Verify** — Health checks hit your live site endpoints
 5. **DAST** — Dynamic security scan
@@ -644,7 +644,7 @@ docker ps
 # View logs:
 docker logs portfolio --tail=50
 docker logs rerkt-ai --tail=50
-docker logs bedrock-ai --tail=50
+docker logs agent-ai --tail=50
 
 # Check SSL cert:
 sudo certbot certificates
@@ -711,7 +711,7 @@ Look for `=== Bootstrap complete ===`. If it's not there, bootstrap is still run
 ```bash
 docker ps
 ```
-Should show `portfolio`, `rerkt-ai`, `bedrock-ai` as `Up`.
+Should show `portfolio`, `rerkt-ai`, `agent-ai` as `Up`.
 
 **Check 4 — Is the cert issued?**
 ```bash
@@ -776,9 +776,13 @@ Let's Encrypt requires your domain to point to your EC2's public IP **before** t
      -d yourdomain.com \
      -d www.yourdomain.com \
      -d ai.yourdomain.com \
-     -d bedrock.yourdomain.com
+     -d agent.yourdomain.com \
+     -d origin.yourdomain.com
    docker exec portfolio nginx -s reload
    ```
+   `origin.yourdomain.com` is CloudFront's origin-facing hostname (see
+   `terraform/cloudfront.tf`) — it must stay on this cert's SAN list or
+   CloudFront will fail to validate the origin's TLS cert.
 
 ---
 
@@ -818,11 +822,11 @@ GitHub Actions (OIDC — no static AWS keys)
 
 EC2 (t3.nano) runs:
   ├── portfolio     → nginx:443 HTTPS (yourdomain.com)
-  ├── rerkt-ai      → Node.js:3001 AI chat proxy (ai.yourdomain.com)
-  ├── bedrock-ai    → Node.js:3002 Bedrock AI proxy (bedrock.yourdomain.com)
+  ├── rerkt-ai      → Node.js:3001 AI chat proxy (ai.yourdomain.com, kept as rollback path — see chat.tf; live traffic goes to the chat-ai Lambda instead)
+  ├── agent-ai      → Python/FastAPI:3003 infra AI agent (agent.yourdomain.com, single-IP allowlisted)
   └── node-exporter → :9100 host metrics (Prometheus scrape target)
 
-Route53 A records → Elastic IP (static, survives EC2 recreate)
+Route53: apex + www alias to CloudFront (see cloudfront.tf); ai./agent. are direct A records → Elastic IP (static, survives EC2 recreate)
 ECR → stores Docker images (3 repos, last 5 tags kept)
 SSM Parameter Store → /your-namespace/portfolio/eip + instance-id
 AWS Secrets Manager → /your-namespace/anthropic-api-key (encrypted)
@@ -857,6 +861,7 @@ Everything else (instance ID, IP, API key) is read from SSM Parameter Store at r
 | `website/index.html` | Your portfolio content (replace `YOUR_*` placeholders) |
 | `terraform/terraform.tfvars` | Your infrastructure config (domain, IP, key pair, etc.) |
 | `chat/` | AI chat proxy (Node.js) — optional customization |
-| `bedrock/` | Bedrock AI proxy (Node.js) — optional customization |
+| `agent/` | Infrastructure AI agent (Python/FastAPI) — optional customization |
 | `nginx-ssl.conf` | nginx routing config — edit if adding new subdomains |
+| `terraform/cloudfront.tf` | CloudFront + ACM config for the root+www vhost |
 | `Dockerfile` | Docker image config — rarely needs changing |

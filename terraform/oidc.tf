@@ -75,9 +75,9 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRAuth"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
@@ -133,6 +133,12 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "lambda:InvokeFunction" # used by deploy.yml's verify-stage health check
         ]
         Resource = [aws_lambda_function.chat_ai.arn]
+      },
+      {
+        Sid      = "CloudFrontInvalidate"
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation"]
+        Resource = aws_cloudfront_distribution.portfolio.arn
       }
     ]
   })

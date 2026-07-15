@@ -58,8 +58,8 @@ certbot certonly \
   -d "$DOMAIN" \
   -d "www.$DOMAIN" \
   -d "ai.$DOMAIN" \
-  -d "bedrock.$DOMAIN" \
-  -d "agent.$DOMAIN"
+  -d "agent.$DOMAIN" \
+  -d "origin.$DOMAIN"
 
 echo "SSL cert issued successfully at $(date)"
 
@@ -122,7 +122,7 @@ clients:
   - url: $LOKI_URL
 
 scrape_configs:
-  # Docker container logs — portfolio, rerkt-ai, bedrock-ai
+  # Docker container logs — portfolio, rerkt-ai, agent-ai
   - job_name: portfolio-containers
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
