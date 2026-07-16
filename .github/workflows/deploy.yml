@@ -237,11 +237,27 @@ jobs:
           # single-line case. Fetched directly here (not via a remote SSM
           # command) since the runner's OIDC role already has ssm:GetParameter
           # + kms:Decrypt — see oidc.tf.
+          #
+          # Graceful no-op fallback (not just a skip) is required here,
+          # unlike the Lambda/invalidation steps: nginx-ssl.conf's `include`
+          # for this file is unconditional, so nginx would fail to start
+          # entirely without SOME valid file — and a "deny by default"
+          # fallback would break 100% of agent.'s current direct traffic
+          # immediately on deploy, well before the actual DNS cutover to
+          # CloudFront happens. A no-op conf keeps nginx starting and
+          # direct access working exactly as before; the check activates
+          # for real automatically once `terraform apply` creates the real
+          # secret and the next deploy picks it up.
           ORIGIN_VERIFY_SECRET=$(aws ssm get-parameter \
             --name "/${{ env.SSM_NAMESPACE }}/agent/origin-verify-secret" \
             --with-decryption --query "Parameter.Value" --output text \
-            --region ${{ env.AWS_REGION }})
-          ORIGIN_VERIFY_CONF="if (\$http_x_origin_verify != \"$ORIGIN_VERIFY_SECRET\") { return 403; }"
+            --region ${{ env.AWS_REGION }} 2>/dev/null) || true
+          if [ -z "$ORIGIN_VERIFY_SECRET" ]; then
+            echo "agent/origin-verify-secret doesn't exist yet (run terraform apply first) — writing a no-op conf so nginx still starts; the check activates automatically once the secret exists"
+            ORIGIN_VERIFY_CONF="# origin-verify secret not yet provisioned by terraform apply — no-op until it exists"
+          else
+            ORIGIN_VERIFY_CONF="if (\$http_x_origin_verify != \"$ORIGIN_VERIFY_SECRET\") { return 403; }"
+          fi
           ORIGIN_VERIFY_CONF_B64=$(echo "$ORIGIN_VERIFY_CONF" | base64 -w0)
 
           COMMAND=$(aws ssm send-command \
