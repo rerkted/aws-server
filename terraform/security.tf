@@ -32,7 +32,7 @@ resource "aws_security_group" "portfolio" {
     to_port         = 443
     protocol        = "tcp"
     prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id]
-    description     = "HTTPS — CloudFront origin-facing only (see migration plan Phase 4)"
+    description     = "HTTPS - CloudFront origin-facing only (see migration plan Phase 4)"
   }
 
   # Restrict SSH to your IP only — set in terraform.tfvars
