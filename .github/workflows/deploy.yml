@@ -378,13 +378,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Uses the domain name, not the raw EIP — Phase 4 restricts port 443
+      # to CloudFront's origin-facing IPs only, and GitHub Actions runners
+      # aren't in that range. See migration plan Phase 4.
       - name: Health check — Portfolio
         run: |
           sleep 10
-          PORTFOLIO_IP=$(aws ssm get-parameter \
-            --name "/${{ env.SSM_NAMESPACE }}/portfolio/eip" \
-            --query "Parameter.Value" --output text)
-          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://$PORTFOLIO_IP/health)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://${{ env.DOMAIN_NAME }}/health)
           if [ "$STATUS" != "200" ]; then
             echo "Portfolio health check failed — HTTP $STATUS"
             exit 1
