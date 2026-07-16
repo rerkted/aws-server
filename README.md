@@ -24,10 +24,23 @@ GitHub Actions (OIDC — no static AWS keys)
                               │
                               ▼
                      portfolio   → nginx reverse proxy (yourdomain.com)
-                     rerkt-ai    → Claude API proxy (ai.yourdomain.com)
-                     bedrock-ai  → AWS Bedrock proxy (bedrock.yourdomain.com)
-                     HTTPS via Let's Encrypt
+                     chat-ai     → Lambda, Claude API proxy (ai.yourdomain.com/api/)
+                     agent-ai    → WebSocket infra agent (agent.yourdomain.com)
+                     HTTPS via Let's Encrypt (origin cert)
+
+Runtime traffic:
+
+Browser
+   │
+   ▼
+CloudFront (3 distributions — root/www, ai., agent.)
+   │  HTTPS only; EC2 security group only accepts
+   │  connections from CloudFront's own IP range
+   ▼
+EC2 → nginx → static files / Lambda (chat) / FastAPI (agent)
 ```
+
+See [CLOUDFRONT-README.md](CLOUDFRONT-README.md) for the full CDN migration writeup.
 
 ---
 
@@ -164,6 +177,7 @@ Auto-renewal (cron, twice daily — 3am & 3pm UTC):
 - SSM-based deployment — no SSH in CI/CD pipeline
 - Encrypted EBS volume (gp3)
 - IMDSv2 required (`http_tokens = "required"`)
+- CloudFront in front of all traffic — origin's security group only accepts HTTPS from CloudFront's own IP range, with AWS Shield Standard DDoS absorption included free. See [CLOUDFRONT-README.md](CLOUDFRONT-README.md).
 
 ### CI/CD Pipeline
 - GitHub Actions OIDC federation — no static AWS access keys

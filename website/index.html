@@ -318,6 +318,13 @@
         <div class="project-desc">Eliminated all hardcoded IPs and instance IDs from GitHub secrets and CI/CD pipelines. EC2 instance IDs and Elastic IPs are now written to AWS SSM Parameter Store by Terraform on every apply. GitHub Actions workflows query SSM at runtime to discover targets dynamically &mdash; no manual secret rotation when infrastructure is destroyed and recreated. The Grafana security group automatically locks to the portfolio EC2&rsquo;s current EIP, and Promtail reads the Loki endpoint from SSM at boot. Zero static credentials, zero manual updates.</div>
         <div class="project-tech"><span class="tag">AWS SSM Parameter Store</span><span class="tag">Terraform</span><span class="tag">GitHub Actions</span><span class="tag">IAM</span><span class="tag">Dynamic Config</span></div>
       </div>
+      <div class="project-card">
+        <div class="project-number">Project 10</div>
+        <div class="project-name">Multi-Distribution CloudFront CDN</div>
+        <div class="project-desc">Migrated three independently-behaving vhosts (static portfolio, Lambda-backed chat widget, WebSocket-based infra agent) from direct EC2 exposure to CloudFront in four incremental, zero-downtime phases. Caught and fixed a Host-header forwarding gap and a cache-key collision risk before they shipped, added WebSocket support with correct idle-timeout handling, layered a CloudFront-only secret header on top of an IP allowlist for the highest-privilege endpoint, then locked the origin&rsquo;s security group to CloudFront&rsquo;s IP range only &mdash; catching in design review a change that would have silently broken certificate renewal 60&ndash;90 days later. All within AWS&rsquo;s Always Free tier.</div>
+        <div class="project-tech"><span class="tag">AWS CloudFront</span><span class="tag">ACM</span><span class="tag">Terraform</span><span class="tag">nginx</span><span class="tag">WebSocket</span><span class="tag">Security Groups</span></div>
+        <a href="https://github.com/rerkted/aws-server/blob/main/CLOUDFRONT-README.md" target="_blank" class="project-link">View writeup &rarr;</a>
+      </div>
     </div>
   </section>
 
