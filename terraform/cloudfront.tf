@@ -292,3 +292,143 @@ output "ai_cloudfront_domain_name" {
   value       = aws_cloudfront_distribution.ai.domain_name
   description = "Pre-cutover smoke-test target — curl with -H \"Host: ai.DOMAIN_NAME\" to verify the ai. vhost (not the portfolio homepage) is served before flipping chat.tf's ai record to alias it"
 }
+
+## ─── CLOUDFRONT DISTRIBUTION — agent.DOMAIN_NAME (Phase 3) ─────
+# Same reasoning as ai.'s separate distribution (Host-forwarding needs its
+# own origin_request_policy_id; a new resource is safer than retrofitting a
+# live one) — with one difference: agent.'s "/" is not static (no
+# root/try_files anywhere in its nginx block, everything including "/" is
+# dynamic FastAPI output), so default_cache_behavior uses CachingDisabled,
+# not CachingOptimized. Nothing here is ever cached, so this distribution
+# deliberately has no CI cache-invalidation step — there's nothing to
+# invalidate.
+#
+# Higher stakes than ai.: terraform/iam.tf's agent-infrastructure-policy
+# grants this backend ec2:StartInstances/StopInstances and security-group
+# rule mutation with Resource="*" — a real infrastructure-mutating
+# capability behind a single-IP nginx allowlist, not a read-only chatbot.
+# The custom_header below is defense-in-depth for that: a secret only
+# CloudFront can attach to origin requests (viewers never see or set it),
+# checked by nginx alongside (not instead of) the existing IP allowlist.
+# This closes the narrower gap where the allowlisted IP itself becomes
+# reachable from an unexpected network path (e.g. mobile/residential CGNAT
+# sharing an egress IP with other customers) — it does NOT close the
+# broader direct-EIP-bypass gap (security group still open on 443 from
+# 0.0.0.0/0), which remains Phase 4's job.
+
+resource "random_password" "agent_origin_verify" {
+  length  = 32
+  special = false # goes into an HTTP header value and an nginx string literal — keep it alphanumeric to avoid escaping issues in both
+}
+
+resource "aws_ssm_parameter" "agent_origin_verify_secret" {
+  #checkov:skip=CKV_AWS_337:AWS-managed KMS key is sufficient here, matches the same reasoning already applied to anthropic-api-key in secrets.tf
+  name        = "/${var.ssm_namespace}/agent/origin-verify-secret"
+  description = "Shared secret CloudFront attaches to origin requests for agent. — checked by nginx alongside the IP allowlist, not instead of it"
+  type        = "SecureString"
+  value       = random_password.agent_origin_verify.result
+
+  tags = { Name = "agent-origin-verify-secret" }
+}
+
+resource "aws_cloudfront_distribution" "agent" {
+  #checkov:skip=CKV_AWS_86:Access logging to S3 disabled intentionally — cost avoidance, matches other cost-tradeoff decisions in this repo
+  #checkov:skip=CKV_AWS_310:Origin failover not configured — single EC2 origin by design, no second origin to fail over to
+  #checkov:skip=CKV_AWS_374:Geo restriction intentionally left open — personal portfolio site, no audience restriction needed
+  #checkov:skip=CKV2_AWS_32:Response headers policy not attached — nginx already sets all security headers (HSTS, CSP, X-Frame-Options, etc.) at the origin and CloudFront passes them through unchanged
+  #checkov:skip=CKV_AWS_305:Default root object not set — nginx's own routing already covers this at the origin
+  #checkov:skip=CKV_AWS_68:WAF intentionally out of scope for this rollout — real per-rule/per-request cost, conflicts with the no-additional-cost constraint on this phase. See migration plan.
+  #checkov:skip=CKV2_AWS_47:Same reasoning as CKV_AWS_68 — no WAFv2 WebACL attached by design (cost), so there's nothing to configure an AMR rule group on
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "agent — Phase 3"
+  aliases         = ["agent.${var.domain_name}"]
+  price_class     = var.cloudfront_price_class
+  http_version    = "http2and3" # viewer-facing only — browsers always negotiate the WebSocket handshake as HTTP/1.1 regardless of what protocol the page loaded over, so this doesn't conflict with CloudFront's WebSocket-is-HTTP/1.1-only constraint. Don't "fix" this down to http1.1, it's not a bug.
+
+  origin {
+    domain_name = aws_route53_record.origin.fqdn
+    origin_id   = "portfolio-ec2"
+
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.agent_origin_verify.result
+    }
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_keepalive_timeout = 5
+      origin_read_timeout      = 60 # up from the 30s default used elsewhere — defense-in-depth margin for the initial handshake/non-WS paths. Established WebSocket connections get their own separate, dedicated 10-minute CloudFront idle-connection allowance regardless of this setting (verified against current AWS docs) — no support ticket needed either way.
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "portfolio-ec2"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled — agent.'s "/" is dynamic FastAPI output, not static, unlike ai.'s chat UI
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AWS managed: Managed-AllViewer (forwards Host)
+  }
+
+  # WebSocket — AWS's own docs confirm Managed-AllViewer is the documented
+  # mechanism for WebSocket support (forwards all viewer headers, including
+  # the Sec-WebSocket-* handshake family). compress=false per AWS's explicit
+  # recommendation for WebSocket behaviors, to avoid Accept-Encoding/
+  # permessage-deflate interaction issues with the handshake. GET/HEAD only
+  # is correct and sufficient — the WS handshake is always a GET request
+  # (RFC 6455), unlike ai.'s /api/* which needed the full 7-method set.
+  ordered_cache_behavior {
+    path_pattern             = "/ws/*"
+    target_origin_id         = "portfolio-ec2"
+    viewer_protocol_policy   = "https-only"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = false
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AWS managed: Managed-AllViewer
+  }
+
+  # Let's Encrypt HTTP-01 validation — same pattern as Phase 1/2.
+  # agent.DOMAIN_NAME is already a live SAN on the origin/certbot cert.
+  ordered_cache_behavior {
+    path_pattern           = "/.well-known/acme-challenge/*"
+    target_origin_id       = "portfolio-ec2"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.portfolio.certificate_arn
+    ssl_support_method       = "sni-only" # dedicated IP (vip) is billed — never use it
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  tags = { Name = "agent-cloudfront" }
+}
+
+resource "aws_ssm_parameter" "agent_cloudfront_distribution_id" {
+  #checkov:skip=CKV2_AWS_34:Distribution ID is not sensitive — used only for CI cache invalidation targeting
+  name  = "/${var.ssm_namespace}/agent/cloudfront-distribution-id"
+  type  = "String"
+  value = aws_cloudfront_distribution.agent.id
+
+  tags = { Name = "agent-cloudfront-distribution-id" }
+}
+
+output "agent_cloudfront_domain_name" {
+  value       = aws_cloudfront_distribution.agent.domain_name
+  description = "Pre-cutover smoke-test target — curl with -H \"Host: agent.DOMAIN_NAME\" and the X-Origin-Verify secret to verify before flipping agent.tf's record to alias it"
+}

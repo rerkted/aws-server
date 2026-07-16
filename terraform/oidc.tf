@@ -142,6 +142,17 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           aws_cloudfront_distribution.portfolio.arn,
           aws_cloudfront_distribution.ai.arn
         ]
+      },
+      {
+        # Needed so the runner can read agent_origin_verify_secret
+        # (SecureString) directly with --with-decryption, mirroring the
+        # EC2 instance role's equivalent statement in iam.tf. Wildcard
+        # resource because the AWS-managed SSM encryption key's ARN isn't
+        # a Terraform-managed resource.
+        Sid      = "KMSDecrypt"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
       }
     ]
   })

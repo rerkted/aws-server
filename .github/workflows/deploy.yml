@@ -229,6 +229,21 @@ jobs:
             exit 1
           fi
 
+          # Same base64-delivery approach as REALIP_CONF above, and for the
+          # same reason: this content references an nginx variable
+          # ($http_x_origin_verify), so building it inline inside the
+          # already-escaped SSM commands array would need several more
+          # levels of quote-escaping than agent-allowlist.conf's simpler
+          # single-line case. Fetched directly here (not via a remote SSM
+          # command) since the runner's OIDC role already has ssm:GetParameter
+          # + kms:Decrypt — see oidc.tf.
+          ORIGIN_VERIFY_SECRET=$(aws ssm get-parameter \
+            --name "/${{ env.SSM_NAMESPACE }}/agent/origin-verify-secret" \
+            --with-decryption --query "Parameter.Value" --output text \
+            --region ${{ env.AWS_REGION }})
+          ORIGIN_VERIFY_CONF="if (\$http_x_origin_verify != \"$ORIGIN_VERIFY_SECRET\") { return 403; }"
+          ORIGIN_VERIFY_CONF_B64=$(echo "$ORIGIN_VERIFY_CONF" | base64 -w0)
+
           COMMAND=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -240,6 +255,8 @@ jobs:
               \"mkdir -p /etc/nginx/conf.d && echo \\\"allow \$AGENT_ALLOWED_IP; deny all;\\\" > /etc/nginx/conf.d/agent-allowlist.conf\",
 
               \"echo $REALIP_CONF_B64 | base64 -d > /etc/nginx/conf.d/cloudfront-realip.conf\",
+
+              \"echo $ORIGIN_VERIFY_CONF_B64 | base64 -d > /etc/nginx/conf.d/agent-origin-verify.conf\",
 
               \"docker pull $PORTFOLIO_IMAGE\",
               \"docker stop portfolio || true\",
